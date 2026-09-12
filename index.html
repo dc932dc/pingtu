@@ -7,15 +7,15 @@
 <style>
   :root {
     color-scheme: dark; /* 原生控件（下拉弹层/取色器/数字框）统一走暗色 */
-    --bg: #0a0d13;
-    --border: rgba(255, 255, 255, .08);
-    --border-strong: rgba(160, 185, 255, .25);
-    --text: #e7ecf5;
-    --dim: rgba(231, 236, 245, .52);
-    --faint: rgba(231, 236, 245, .32);
-    --accent: #7aa2f7;
-    --accent-deep: #5b7ff0;
-    --accent-soft: rgba(122, 162, 247, .14);
+    --bg: #0a0a0a;
+    --border: rgba(255, 255, 255, .14);
+    --border-strong: rgba(255, 255, 255, .32);
+    --text: #ededed;
+    --dim: #a1a1a1;
+    --faint: #6f6f6f;
+    --accent: #ffffff;
+    --accent-deep: #d4d4d4;
+    --accent-soft: rgba(255, 255, 255, .1);
     --err: #f0937f;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -24,23 +24,11 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
     color: var(--text);
-    background:
-      radial-gradient(1200px 500px at 82% -10%, rgba(96, 130, 255, .10), transparent 55%),
-      radial-gradient(900px 450px at 0% 110%, rgba(64, 201, 255, .05), transparent 55%),
-      var(--bg);
+    background: var(--bg);
     -webkit-font-smoothing: antialiased;
   }
-  /* 极淡的网格底纹，纯 CSS，无资源加载 */
-  body::before {
-    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background-image:
-      linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px);
-    background-size: 48px 48px;
-    -webkit-mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 72%);
-    mask-image: radial-gradient(ellipse at 50% 0%, #000 20%, transparent 72%);
-  }
-  ::selection { background: rgba(122, 162, 247, .35); }
+  #starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  ::selection { background: rgba(255, 255, 255, .22); }
   ::-webkit-scrollbar { width: 10px; }
   ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -50,36 +38,30 @@
   [id] { scroll-margin-top: 28px; }
 
   h1 { font-size: 27px; font-weight: 800; letter-spacing: .01em; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  h1 .zh {
-    background: linear-gradient(92deg, #f5f8ff 25%, #a9c0ea);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-  }
+  h1 .zh { color: #fff; }
   h1 .en { font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
   .slogan { font-size: 13px; margin: 12px 0 22px; color: var(--dim); display: flex; align-items: center; gap: 10px; }
-  .slogan::before { content: ''; flex: none; width: 18px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, var(--accent), transparent); }
+  .slogan::before { content: ''; flex: none; width: 18px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, #fff, transparent); }
 
   /* 工具切换 */
   .tool-nav { display: flex; gap: 10px; margin: 0 0 26px; }
   .tool-tab {
     padding: 9px 22px; border-radius: 999px; border: 1px solid var(--border);
-    background: rgba(255, 255, 255, .04); color: var(--dim);
+    background: transparent; color: var(--dim);
     font-size: 14px; cursor: pointer; font-family: inherit; letter-spacing: .02em;
     transition: color .15s, border-color .15s, background .15s, box-shadow .15s;
   }
-  .tool-tab:hover { color: var(--text); border-color: var(--border-strong); }
+  .tool-tab:hover { color: #fff; border-color: var(--border-strong); }
   .tool-tab.active {
-    background: linear-gradient(135deg, #6688f0, #4a63d8); color: #fff;
-    border-color: transparent; box-shadow: 0 8px 24px rgba(80, 110, 240, .28);
+    background: #fff; color: #000; border-color: #fff; font-weight: 600; box-shadow: none;
   }
 
   /* 毛玻璃主卡片 */
   .glass {
     position: relative; padding: 30px 30px 34px; border-radius: 18px;
     border: 1px solid var(--border);
-    background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012));
-    backdrop-filter: blur(16px) saturate(1.25);
-    -webkit-backdrop-filter: blur(16px) saturate(1.25);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, .4), inset 0 1px 0 rgba(255, 255, 255, .06);
+    background: #0f0f0f;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .05), 0 24px 60px rgba(0, 0, 0, .6);
   }
 
   .row { display: flex; align-items: flex-start; margin-bottom: 22px; }
@@ -93,13 +75,13 @@
   select.sel option, option { background: #0d1117; color: #e7ecf5; }
 
   .drop {
-    display: inline-block; color: #fff; font-size: 15px; letter-spacing: .02em;
+    display: inline-block; color: #000; font-size: 15px; font-weight: 600; letter-spacing: .02em;
     padding: 14px 28px; border-radius: 12px; cursor: pointer; user-select: none;
-    background: linear-gradient(135deg, #6688f0, #4a63d8);
-    box-shadow: 0 10px 28px rgba(80, 110, 240, .28);
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
     transition: filter .15s ease, transform .15s ease;
   }
-  .drop:hover { filter: brightness(1.1); }
+  .drop:hover { background: #e6e6e6; }
   .drop:active { transform: translateY(1px); }
   .hint { font-size: 12px; color: var(--faint); margin: 12px 0 0 78px; line-height: 1.8; }
 
@@ -148,28 +130,27 @@
     font-family: inherit; letter-spacing: .02em; transition: filter .15s, background .15s, border-color .15s;
   }
   .btn-primary {
-    background: linear-gradient(135deg, #6688f0, #4a63d8); color: #fff;
-    box-shadow: 0 10px 28px rgba(80, 110, 240, .28);
+    background: #fff; color: #000; font-weight: 600;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
   }
-  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-primary:hover { background: #e6e6e6; }
   .btn-ghost { background: rgba(255, 255, 255, .04); color: var(--text); border-color: var(--border); }
   .btn-ghost:hover { background: rgba(255, 255, 255, .07); border-color: var(--border-strong); }
   .btn:disabled { opacity: .55; cursor: default; filter: none; }
   .btn-blue {
-    background: linear-gradient(135deg, #6688f0, #4a63d8); color: #fff; text-decoration: none;
-    display: inline-block; box-shadow: 0 10px 28px rgba(80, 110, 240, .28);
+    background: #fff; color: #000; font-weight: 600; text-decoration: none;
+    display: inline-block; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
   }
+  .btn-blue:hover { background: #e6e6e6; }
 
-  .msg { min-height: 22px; margin-top: 16px; font-size: 13px; color: #9db8e8; font-variant-numeric: tabular-nums; }
+  .msg { min-height: 22px; margin-top: 16px; font-size: 13px; color: #8ab4f8; font-variant-numeric: tabular-nums; }
   .msg.err { color: var(--err); }
 
   .result {
     margin-top: 18px; padding: 22px;
     border: 1px solid var(--border); border-radius: 16px;
-    background: rgba(13, 17, 25, .6);
-    backdrop-filter: blur(14px) saturate(1.2);
-    -webkit-backdrop-filter: blur(14px) saturate(1.2);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05);
+    background: #0f0f0f;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
   }
   .result h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; letter-spacing: .04em; }
   .result h2::before { content: ''; width: 3px; height: 15px; border-radius: 2px; background: var(--accent); }
@@ -197,7 +178,7 @@
     font-size: 12px; padding: 6px 0; border-radius: 8px;
     background: rgba(0, 0, 0, .55); color: var(--accent); text-decoration: none; transition: background .15s, color .15s;
   }
-  .tile .mini-btn:hover { background: rgba(122, 162, 247, .5); color: #fff; }
+  .tile .mini-btn:hover { background: rgba(255, 255, 255, .25); color: #fff; }
 
   .drop-overlay {
     position: fixed; inset: 0; z-index: 100;
@@ -249,32 +230,30 @@
   .jump button {
     width: 38px; height: 38px; border-radius: 50%;
     border: 1px solid var(--border);
-    background: rgba(14, 18, 26, .75); color: var(--dim);
+    background: rgba(10, 10, 10, .8); color: var(--dim);
     font-size: 16px; line-height: 1; cursor: pointer;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     transition: background .15s, border-color .15s, color .15s;
   }
-  .jump button:hover { background: linear-gradient(135deg, #6688f0, #4a63d8); border-color: transparent; color: #fff; }
+  .jump button:hover { background: #0a0a0a; border-color: #fff; color: #fff; }
   .jump button:active { filter: brightness(1.2); }
 
   /* 左侧目录：宽屏时列出当前工具的各个区块，点击跳转 */
   .toc {
     position: fixed; top: 50%; transform: translateY(-50%);
-    left: max(12px, calc(50vw - 548px));
-    width: 168px; z-index: 55;
+    left: max(10px, calc(50vw - 520px));
+    width: 116px; z-index: 55;
     display: flex; flex-direction: column; gap: 4px;
   }
   .toc button {
-    border: 1px solid transparent; border-radius: 10px;
+    border: 1px solid transparent; border-radius: 8px;
     background: transparent; color: var(--faint);
-    font-size: 13px; text-align: left; padding: 7px 14px;
-    cursor: pointer; font-family: inherit; letter-spacing: .03em;
+    font-size: 12px; text-align: left; padding: 6px 10px;
+    cursor: pointer; font-family: inherit; letter-spacing: .02em;
     transition: color .15s, background .15s, border-color .15s;
   }
-  .toc button:hover { color: var(--text); background: rgba(255, 255, 255, .05); }
+  .toc button:hover { color: #fff; background: rgba(255, 255, 255, .06); }
   .toc button.active {
-    color: var(--text); background: var(--accent-soft); border-color: var(--border-strong);
+    color: #fff; background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .25);
   }
   @media (max-width: 1080px) { .toc { display: none; } }
 
@@ -309,6 +288,7 @@
 </style>
 </head>
 <body>
+<canvas id="starfield" aria-hidden="true"></canvas>
 <main class="wrap">
   <h1><span class="zh" id="h1Zh">拼接图片</span> <span class="en" id="h1En">Combine Images</span></h1>
   <p class="slogan">不上传、不留存、不扫描、不识别，100%安全</p>
@@ -587,15 +567,16 @@
   const tocMap = {
     merge: [
       ['拼接模式', 'sec-mode'], ['压缩算法', 'sec-format'], ['质量/尺寸', 'sec-quality'],
-      ['拼接样式', 'sec-style'], ['水印', 'sec-watermark'], ['文件', 'sec-files'], ['合并', 'sec-actions'], ['合并结果', 'result'],
+      ['拼接样式', 'sec-style'], ['水印', 'sec-watermark'], ['文件', 'sec-files'],
+      ['合并', 'sec-actions'], ['合并结果', 'result'], ['下载', 'downloadBtn'],
     ],
     grid: [
       ['文件', 'sec-grid-files'], ['切割规格', 'sec-grid-n'], ['输出格式', 'sec-grid-fmt'],
-      ['切割', 'grid-actions'], ['切割结果', 'gridResult'],
+      ['切割', 'grid-actions'], ['切割结果', 'gridResult'], ['打包下载', 'dlAllBtn'],
     ],
     compress: [
       ['文件', 'sec-c-files'], ['输出格式', 'sec-c-fmt'], ['压缩质量', 'sec-c-quality'],
-      ['压缩', 'compress-actions'], ['压缩结果', 'compressResult'],
+      ['压缩', 'compress-actions'], ['压缩结果', 'compressResult'], ['打包下载', 'cZipBtn'],
     ],
   };
   function renderToc() {
@@ -1980,6 +1961,71 @@
   window.addEventListener('scroll', updateJumpBtns, { passive: true });
   window.addEventListener('resize', updateJumpBtns);
   updateJumpBtns();
+
+  // —— 星空背景：缓慢漂移 + 闪烁 + 偶尔流星（prefers-reduced-motion 时静止） ——
+  const starCanvas = $('#starfield'), starCtx = starCanvas.getContext('2d');
+  const stars = [];
+  let shoot = null, nextShootAt = performance.now() + 6000 + Math.random() * 9000;
+  const motionOK = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function starResize() {
+    starCanvas.width = innerWidth; starCanvas.height = innerHeight;
+    stars.length = 0;
+    const n = Math.min(220, Math.round(innerWidth * innerHeight / 9000));
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * starCanvas.width, y: Math.random() * starCanvas.height,
+        r: Math.random() * 1.1 + 0.3, base: Math.random() * 0.55 + 0.2,
+        sp: Math.random() * 1.6 + 0.4, ph: Math.random() * Math.PI * 2,
+        vy: Math.random() * 0.06 + 0.02, vx: Math.random() * 0.03 - 0.015,
+      });
+    }
+  }
+  starResize();
+  window.addEventListener('resize', starResize);
+  function starTick(now) {
+    requestAnimationFrame(starTick);
+    if (document.hidden) return;
+    starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+    const t = now / 1000;
+    for (const s of stars) {
+      if (motionOK) {
+        s.y += s.vy; s.x += s.vx;
+        if (s.y > starCanvas.height + 2) { s.y = -2; s.x = Math.random() * starCanvas.width; }
+        if (s.x < -2) s.x = starCanvas.width + 2; else if (s.x > starCanvas.width + 2) s.x = -2;
+      }
+      starCtx.globalAlpha = motionOK ? s.base * (0.55 + 0.45 * Math.sin(t * s.sp + s.ph)) : s.base;
+      starCtx.fillStyle = '#fff';
+      starCtx.beginPath();
+      starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      starCtx.fill();
+    }
+    // 流星：每隔一段时间随机划过
+    if (motionOK) {
+      if (!shoot && now > nextShootAt) {
+        shoot = { x: Math.random() * starCanvas.width * 0.8 + starCanvas.width * 0.1, y: -10,
+                  vx: -(Math.random() * 3 + 2.5), vy: Math.random() * 2 + 2, life: 1 };
+      }
+      if (shoot) {
+        shoot.x += shoot.vx; shoot.y += shoot.vy; shoot.life -= 0.012;
+        const tail = 14;
+        const grad = starCtx.createLinearGradient(shoot.x, shoot.y, shoot.x - shoot.vx * tail, shoot.y - shoot.vy * tail);
+        grad.addColorStop(0, 'rgba(255,255,255,' + Math.max(0, shoot.life) + ')');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        starCtx.globalAlpha = 1;
+        starCtx.strokeStyle = grad;
+        starCtx.lineWidth = 1.4;
+        starCtx.beginPath();
+        starCtx.moveTo(shoot.x, shoot.y);
+        starCtx.lineTo(shoot.x - shoot.vx * tail, shoot.y - shoot.vy * tail);
+        starCtx.stroke();
+        if (shoot.life <= 0 || shoot.y > starCanvas.height + 40) {
+          shoot = null; nextShootAt = now + 7000 + Math.random() * 11000;
+        }
+      }
+    }
+    starCtx.globalAlpha = 1;
+  }
+  requestAnimationFrame(starTick);
 
   // —— 灯箱：点击合并结果图 / 切块放大查看，点击任意处或 Esc 关闭 ——
   const lightbox = $('#lightbox'), lightboxImg = $('#lightboxImg');
