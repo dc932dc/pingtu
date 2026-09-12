@@ -228,6 +228,28 @@
   }
   .jump button:hover { background: linear-gradient(135deg, #6688f0, #4a63d8); border-color: transparent; color: #fff; }
   .jump button:active { filter: brightness(1.2); }
+
+  /* 新增控件：滑块 / 数字输入 / 下拉 / 取色器 */
+  .range-input { width: 150px; accent-color: var(--accent-deep); cursor: pointer; }
+  .num-input, .sel {
+    width: 84px; background: rgba(255, 255, 255, .06); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 6px 8px; font: inherit; font-size: 13px;
+  }
+  .sel { width: auto; }
+  input[type="color"] {
+    width: 40px; height: 30px; padding: 2px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 8px; background: rgba(255, 255, 255, .06);
+  }
+  .file-item.static { cursor: default; }
+  .c-row {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255, 255, 255, .03); border: 1px solid transparent;
+    border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; font-size: 13px;
+  }
+  .c-row .c-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c-row .c-delta { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .c-row a { color: var(--accent); text-decoration: none; }
+  .c-row a:hover { text-decoration: underline; }
   @media (max-width: 560px) {
     .row { flex-wrap: wrap; }
     .label { width: 100%; margin-bottom: 10px; }
@@ -244,6 +266,7 @@
   <nav class="tool-nav" aria-label="工具切换">
     <button class="tool-tab active" data-tool="merge" type="button">拼接图片</button>
     <button class="tool-tab" data-tool="grid" type="button">九宫格切割</button>
+    <button class="tool-tab" data-tool="compress" type="button">图片压缩</button>
   </nav>
 
   <div class="glass">
@@ -264,6 +287,27 @@
           <label><input type="radio" name="format" value="webp">webP <span class="desc">压缩后图片格式为 webp，压缩率较高，大多数浏览器支持</span></label>
           <label><input type="radio" name="format" value="mozjpeg" checked>mozJPEG <span class="desc">压缩后图片格式为 jpg，兼容性最好，所有浏览器支持</span></label>
           <label><input type="radio" name="format" value="avif">avif <span class="desc">压缩后图片格式为 avif，压缩率较高，部分现代浏览器支持</span></label>
+          <label id="avifSpeedWrap" hidden>编码速度
+            <select id="avifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10">最快</option></select>
+          </label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-quality">
+        <span class="label">质量/尺寸</span>
+        <div class="opts">
+          <label>质量 <input type="range" id="quality" class="range-input" min="30" max="100" value="75"> <span class="desc" id="qualityVal">75</span></label>
+          <label>最长边(px，0=不限) <input type="number" id="maxEdge" class="num-input" min="0" value="0"></label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-style">
+        <span class="label">拼接样式</span>
+        <div class="opts">
+          <label>间距(px) <input type="number" id="gapPx" class="num-input" min="0" value="0"></label>
+          <label>边距(px) <input type="number" id="marginPx" class="num-input" min="0" value="0"></label>
+          <label>圆角(px) <input type="number" id="radiusPx" class="num-input" min="0" value="0"></label>
+          <label>背景 <input type="color" id="bgColor" value="#ffffff"></label>
         </div>
       </div>
 
@@ -317,6 +361,7 @@
         <div class="opts">
           <label><input type="radio" name="gridFmt" value="png" checked>PNG（无损）</label>
           <label><input type="radio" name="gridFmt" value="jpeg">JPEG（体积更小）</label>
+          <label><input type="radio" name="gridFmt" value="webp">webP（体积更小）</label>
         </div>
       </div>
       <p class="hint">提示：自动居中裁切为正方形后等分切割；发朋友圈按 1×1 → 3×3 的顺序上传即可拼出完整九宫格。</p>
@@ -334,6 +379,54 @@
         <div class="tiles" id="tiles"></div>
         <div class="actions" style="margin-top:16px">
           <button class="btn btn-blue" id="dlAllBtn" type="button">打包下载 ZIP</button>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ 工具三：图片压缩 ============ -->
+    <section id="tool-compress" hidden>
+      <div class="row" id="sec-c-files">
+        <span class="label">文件</span>
+        <div class="drop" id="compressDrop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片，可多选">+ 选择 / 拖拽 / 粘贴 图片（可多选）</div>
+        <input type="file" id="compressFileInput" accept="image/*" multiple hidden>
+      </div>
+
+      <div class="row" id="sec-c-fmt">
+        <span class="label">输出格式</span>
+        <div class="opts opts-col">
+          <label><input type="radio" name="cFmt" value="webp" checked>webP <span class="desc">体积最小，兼容性较好</span></label>
+          <label><input type="radio" name="cFmt" value="mozjpeg">mozJPEG <span class="desc">输出 jpg，兼容性最好</span></label>
+          <label><input type="radio" name="cFmt" value="avif">avif <span class="desc">压缩率最高，编码最慢</span></label>
+          <label id="cAvifSpeedWrap" hidden>编码速度
+            <select id="cAvifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10">最快</option></select>
+          </label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-c-quality">
+        <span class="label">压缩质量</span>
+        <div class="opts">
+          <label>质量 <input type="range" id="cQuality" class="range-input" min="30" max="100" value="75"> <span class="desc" id="cQualityVal">75</span></label>
+        </div>
+      </div>
+      <p class="hint">提示：保持原始分辨率，仅重新编码压缩；所有处理在浏览器本地完成，不上传。可整个文件夹拖入批量压缩，多张时支持打包 ZIP。</p>
+
+      <div class="file-list-header" id="cListHeader" hidden><span id="cCount"></span></div>
+      <div class="file-list" id="compressList"></div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="compressBtn">压缩</button>
+        <button class="btn btn-ghost" id="compressResetBtn">重置</button>
+      </div>
+
+      <p class="msg" id="compressMsg"></p>
+
+      <section class="result" id="compressResult" hidden>
+        <h2>压缩结果</h2>
+        <p class="info" id="compressInfo"></p>
+        <div id="compressResults"></div>
+        <div class="actions" style="margin-top:16px">
+          <button class="btn btn-blue" id="cZipBtn" type="button" hidden>打包下载 ZIP</button>
         </div>
       </section>
     </section>
@@ -371,8 +464,9 @@
 
   // —— 工具切换 ——
   const toolMeta = {
-    merge: { zh: '拼接图片', en: 'Combine Images', title: '拼接图片 · Combine Images' },
-    grid:  { zh: '九宫格切割', en: 'Nine-Grid Cutter', title: '九宫格切割 · Nine-Grid Cutter' },
+    merge:    { zh: '拼接图片', en: 'Combine Images', title: '拼接图片 · Combine Images' },
+    grid:     { zh: '九宫格切割', en: 'Nine-Grid Cutter', title: '九宫格切割 · Nine-Grid Cutter' },
+    compress: { zh: '图片压缩', en: 'Image Compressor', title: '图片压缩 · Image Compressor' },
   };
   let currentTool = 'merge';
   function switchTool(t) {
@@ -381,12 +475,17 @@
     document.querySelectorAll('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
     $('#tool-merge').hidden = t !== 'merge';
     $('#tool-grid').hidden = t !== 'grid';
+    $('#tool-compress').hidden = t !== 'compress';
     h1Zh.textContent = toolMeta[t].zh;
     h1En.textContent = toolMeta[t].en;
     document.title = toolMeta[t].title;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   document.querySelectorAll('.tool-tab').forEach(b => b.addEventListener('click', () => switchTool(b.dataset.tool)));
+
+  // 按当前工具分发：状态消息与文件入口（函数在各自工具区块定义，调用时均已就绪）
+  const toolSetMsg = (t, isErr) => (currentTool === 'grid' ? setGridMsg(t, isErr) : currentTool === 'compress' ? setCMsg(t, isErr) : setMsg(t, isErr));
+  const toolAddFiles = (list) => (currentTool === 'grid' ? gridAddFiles(list) : currentTool === 'compress' ? compressAddFiles(list) : addFiles(list));
 
   /* ================= 工具一：拼接图片 ================= */
 
@@ -532,65 +631,79 @@
     a.parentNode.insertBefore(b, aSibling);
   }
 
-  function renderList() {
-    fileList.innerHTML = '';
-    items.forEach((it, i) => {
-      const row = document.createElement('div');
-      row.className = 'file-item';
-      row.dataset.uid = it.uid;
-      row.draggable = true;
+  function buildRow(it) {
+    const row = document.createElement('div');
+    row.className = 'file-item';
+    row.dataset.uid = it.uid;
+    row.draggable = true;
 
-      const img = document.createElement('img');
-      img.className = 'thumb'; img.src = it.url; img.alt = '';
-      img.draggable = false;
+    const img = document.createElement('img');
+    img.className = 'thumb'; img.src = it.url; img.alt = '';
+    img.draggable = false;
 
-      const meta = document.createElement('div');
-      meta.className = 'meta';
-      const name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = it.file.name || '(粘贴的图片)';
-      name.title = name.textContent;
-      const sub = document.createElement('div');
-      sub.className = 'sub';
-      sub.textContent = fmtSize(it.file.size);
-      img.onload = () => { sub.textContent = img.naturalWidth + ' × ' + img.naturalHeight + ' · ' + fmtSize(it.file.size); };
-      meta.append(name, sub);
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = it.file.name || '(粘贴的图片)';
+    name.title = name.textContent;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    sub.textContent = fmtSize(it.file.size);
+    img.onload = () => { sub.textContent = img.naturalWidth + ' × ' + img.naturalHeight + ' · ' + fmtSize(it.file.size); };
+    meta.append(name, sub);
 
-      const ops = document.createElement('div');
-      ops.className = 'ops';
-      const up = document.createElement('button');
-      up.className = 'icon-btn'; up.type = 'button'; up.textContent = '↑'; up.title = '上移';
-      up.dataset.op = 'up';
-      const down = document.createElement('button');
-      down.className = 'icon-btn'; down.type = 'button'; down.textContent = '↓'; down.title = '下移';
-      down.dataset.op = 'down';
-      const del = document.createElement('button');
-      del.className = 'icon-btn'; del.type = 'button'; del.textContent = '✕'; del.title = '移除';
-      del.dataset.op = 'del';
-      ops.append(up, down, del);
+    const ops = document.createElement('div');
+    ops.className = 'ops';
+    const up = document.createElement('button');
+    up.className = 'icon-btn'; up.type = 'button'; up.textContent = '↑'; up.title = '上移';
+    up.dataset.op = 'up';
+    const down = document.createElement('button');
+    down.className = 'icon-btn'; down.type = 'button'; down.textContent = '↓'; down.title = '下移';
+    down.dataset.op = 'down';
+    const del = document.createElement('button');
+    del.className = 'icon-btn'; del.type = 'button'; del.textContent = '✕'; del.title = '移除';
+    del.dataset.op = 'del';
+    ops.append(up, down, del);
 
-      row.addEventListener('dragstart', (e) => {
-        beginDrag(row);
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', String(it.uid)); } catch (_) {}
-      });
-      row.addEventListener('dragover', (e) => {
-        if (!dragUid || row.dataset.uid === dragUid) return;
-        const dragging = rowByUid(dragUid);
-        if (!dragging) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        moveRelative(dragging, row, e.clientY);
-      });
-      row.addEventListener('dragend', () => { if (dragUid) commitDrag(); });
-
-      attachTouchDrag(row);
-
-      row.append(img, meta, ops);
-      fileList.append(row);
+    row.addEventListener('dragstart', (e) => {
+      beginDrag(row);
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(it.uid)); } catch (_) {}
     });
-    syncListNumbers();
-    updateListHeader();
+    row.addEventListener('dragover', (e) => {
+      if (!dragUid || row.dataset.uid === dragUid) return;
+      const dragging = rowByUid(dragUid);
+      if (!dragging) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      moveRelative(dragging, row, e.clientY);
+    });
+    row.addEventListener('dragend', () => { if (dragUid) commitDrag(); });
+
+    attachTouchDrag(row);
+
+    row.append(img, meta, ops);
+    return row;
+  }
+
+  // 分批渲染：几百张图时避免一次性建 DOM 造成卡顿
+  let renderToken = 0;
+  function renderList() {
+    const token = ++renderToken;
+    fileList.innerHTML = '';
+    if (!items.length) { updateListHeader(); return; }
+    let i = 0;
+    const CHUNK = 60;
+    (function chunk() {
+      if (token !== renderToken) return;
+      const frag = document.createDocumentFragment();
+      const end = Math.min(items.length, i + CHUNK);
+      for (; i < end; i++) frag.append(buildRow(items[i]));
+      fileList.append(frag);
+      if (i < items.length) requestAnimationFrame(chunk);
+      else { syncListNumbers(); updateListHeader(); }
+    })();
   }
 
   // 事件委托：按钮点击统一在列表容器上处理
@@ -679,12 +792,12 @@
     step();
   });
   const entryFile = (entry) => new Promise((res) => entry.file(res, () => res(null)));
-  async function walkEntry(entry, out) {
+  async function collectEntries(entry, out) {
     if (!entry) return;
-    if (entry.isFile) { const f = await entryFile(entry); if (f) out.push(f); }
+    if (entry.isFile) out.push(entry);
     else if (entry.isDirectory) {
       const kids = await readDirEntries(entry);
-      for (const k of kids) await walkEntry(k, out);
+      for (const k of kids) await collectEntries(k, out);
     }
   }
 
@@ -695,7 +808,7 @@
     if (dragUid) return; // 列表内排序的拖放，不当作外部文件
     const dt = e.dataTransfer;
     if (!dt) return;
-    const setCurMsg = (t, isErr) => (currentTool === 'grid' ? setGridMsg(t, isErr) : setMsg(t, isErr));
+    const setCurMsg = toolSetMsg;
     // webkitGetAsEntry 只能在 drop 事件内同步调用，事件结束后 DataTransferItem 即失效
     const entries = [], plainFiles = [];
     for (const item of Array.from(dt.items || [])) {
@@ -707,12 +820,15 @@
     if (!entries.length && !dt.files.length) return setCurMsg('未识别到图片文件', true);
     const hasFolder = entries.some(en => en.isDirectory);
     if (hasFolder) setCurMsg('正在读取文件夹…');
-    const out = plainFiles.slice();
-    for (const en of entries) await walkEntry(en, out);
+    // 先递归收集目录条目，再小并发读取文件（8 路），大文件夹明显更快
+    const dirEntries = [];
+    for (const en of entries) await collectEntries(en, dirEntries);
+    const fetched = (await mapLimit(dirEntries, 8, entryFile)).filter(Boolean);
+    const out = plainFiles.concat(fetched);
     const files = out.length ? out : Array.from(dt.files || []);
     const imgs = files.filter(isImageFile);
     if (!imgs.length) return setCurMsg(hasFolder ? '文件夹中没有找到图片文件' : '未识别到图片文件', true);
-    currentTool === 'grid' ? gridAddFiles(imgs) : addFiles(imgs);
+    toolAddFiles(imgs);
   });
   window.addEventListener('dragend', () => { dragDepth = 0; dropOverlay.hidden = true; });
 
@@ -723,7 +839,7 @@
       .map(it => it.getAsFile())
       .filter(Boolean);
     if (files.length) {
-      currentTool === 'grid' ? gridAddFiles(files) : addFiles(files);
+      toolAddFiles(files);
       e.preventDefault();
     }
   });
@@ -783,6 +899,17 @@
     im.src = url;
   });
 
+  // createImageBitmap 在后台线程解码，大图不再卡 UI；不支持或解码失败时回退 <img>
+  const srcW = (s) => ('naturalWidth' in s) ? s.naturalWidth : s.width;
+  const srcH = (s) => ('naturalHeight' in s) ? s.naturalHeight : s.height;
+  async function decodeSource(file) {
+    if (window.createImageBitmap) {
+      try { return await createImageBitmap(file); } catch (_) { /* 走 <img> 兜底 */ }
+    }
+    const url = URL.createObjectURL(file);
+    try { return await loadImg(url); } finally { URL.revokeObjectURL(url); }
+  }
+
   // —— 压缩引擎：与 PicX 相同的 Squoosh WASM 编码器（jSquash），质量用 Squoosh 默认值 ——
   // mozJPEG 75（progressive）· WebP 75 · AVIF 50/speed 6
   // 优先加载页面旁 encoders/ 目录的本地副本（离线可用），缺失时回退 CDN
@@ -811,12 +938,76 @@
     throw lastErr || new Error('编码器加载失败');
   }
 
-  async function squooshEncode(canvas, fmt) {
-    const ctx = canvas.getContext('2d');
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  // —— Worker 编码池：WASM 编码移到后台线程，AVIF / 大图不再冻结页面 ——
+  // file:// 下 Worker 不可用、URL 加 ?noworker 可强制关闭，两种情况均自动回退主线程
+  const workerPool = (() => {
+    if (typeof Worker === 'undefined' || /[?&]noworker\b/.test(location.search)) return null;
+    let workerSrc;
+    try { workerSrc = new URL('worker.js', document.baseURI).href; } catch (_) { return null; }
+    let broken = false, seq = 0;
+    const workers = [];
+    const SIZE = Math.max(2, Math.min(4, navigator.hardwareConcurrency || 4));
+    function getWorker() {
+      if (broken) return null;
+      if (workers.length < SIZE) {
+        try {
+          const w = new Worker(workerSrc, { type: 'module' });
+          const st = { w, jobs: new Map(), load: 0 };
+          w.onmessage = (e) => {
+            const job = st.jobs.get(e.data.id);
+            if (!job) return;
+            st.jobs.delete(e.data.id);
+            st.load--;
+            if (e.data.ok) job.res(e.data.buf);
+            else job.rej(new Error(e.data.message || 'worker 编码失败'));
+          };
+          w.onerror = () => {
+            broken = true;
+            st.jobs.forEach((j) => j.rej(new Error('worker 加载失败')));
+            st.jobs.clear();
+            st.load = 0;
+          };
+          workers.push(st);
+          return st;
+        } catch (_) { broken = true; return null; }
+      }
+      return workers.reduce((a, b) => (a.load <= b.load ? a : b));
+    }
+    return {
+      get broken() { return broken; },
+      encode(imageData, fmt, options) {
+        return new Promise((res, rej) => {
+          const st = getWorker();
+          if (!st) return rej(new Error('worker 不可用'));
+          const id = ++seq;
+          const buf = imageData.data.buffer;
+          st.jobs.set(id, { res, rej });
+          st.load++;
+          // 像素缓冲按 transferable 零拷贝移交，避免大数组再复制一份
+          st.w.postMessage({ id, fmt, buf, width: imageData.width, height: imageData.height, options }, [buf]);
+        });
+      },
+    };
+  })();
+
+  async function squooshEncode(imageData, fmt, options) {
     const encode = await getSquooshEncoder(fmt);
-    const buffer = await encode(imageData); // 缺省参数 = Squoosh/PicX 默认质量
+    const buffer = await encode(imageData, options || {}); // 缺省参数 = Squoosh/PicX 默认质量
     return new Blob([buffer], { type: MIME[fmt] });
+  }
+
+  // 统一编码入口：优先 Worker，任何失败都自动回退主线程重试
+  async function encodeImage(canvas, fmt, options) {
+    const ctx = canvas.getContext('2d');
+    if (workerPool && !workerPool.broken) {
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const buf = await workerPool.encode(imageData, fmt, options);
+        return { blob: new Blob([buf], { type: MIME[fmt] }), engine: 'worker' };
+      } catch (_) { /* 回退主线程 */ }
+    }
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return { blob: await squooshEncode(imageData, fmt, options), engine: 'main' };
   }
 
   mergeBtn.addEventListener('click', async () => {
@@ -825,33 +1016,47 @@
     setMsg('合并中…');
     await new Promise(r => setTimeout(r, 50)); // 让状态先渲染出来
     try {
-      const imgs = [];
-      for (const it of items) imgs.push(await loadImg(it.url));
+      // 并发解码（后台线程），多图时不再逐张串行等待
+      setMsg('解码图片中…');
+      await new Promise(r => setTimeout(r, 20));
+      const imgs = await mapLimit(items, 4, (it) => decodeSource(it.file));
 
       const mode = document.querySelector('input[name="mode"]:checked').value; // vertical | horizontal | grid3
       const vertical = mode === 'vertical';
       const gridMode = mode === 'grid3';
+      const fmt = document.querySelector('input[name="format"]:checked').value; // webp | mozjpeg | avif
+      const quality = Math.max(30, Math.min(100, +$('#quality').value || 75));
+      const encodeOptions = fmt === 'avif'
+        ? { quality, speed: +$('#avifSpeed').value || 6 }
+        : { quality };
+
+      // 样式：间距 / 边距 / 圆角 / 背景色（作用于所有拼接模式）
+      let gapE = Math.max(0, Math.min(200, +$('#gapPx').value || 0));
+      let marginE = Math.max(0, Math.min(200, +$('#marginPx').value || 0));
+      let radiusE = Math.max(0, Math.min(500, +$('#radiusPx').value || 0));
+      const bgColor = $('#bgColor').value;
+      const useStyle = gapE > 0 || marginE > 0 || radiusE > 0;
 
       // 尺寸计算
       // 纵向/横向：统一为最大宽度（纵向）/最大高度（横向），其余等比缩放
       // 九宫格：所有图居中裁切成统一单元格
       const target = vertical
-        ? maxOf(imgs, m => m.naturalWidth)
-        : maxOf(imgs, m => m.naturalHeight);
+        ? maxOf(imgs, m => srcW(m))
+        : maxOf(imgs, m => srcH(m));
       let boxes, cols = 0, rowsN = 0, unified;
       if (gridMode) {
-        const A = imgs.reduce((s, m) => s + m.naturalWidth / m.naturalHeight, 0) / imgs.length;
-        const ch = maxOf(imgs, m => m.naturalHeight);
+        const A = imgs.reduce((s, m) => s + srcW(m) / srcH(m), 0) / imgs.length;
+        const ch = maxOf(imgs, m => srcH(m));
         const cw = Math.round(ch * A);
         boxes = imgs.map(() => ({ w: cw, h: ch }));
         cols = 3; rowsN = Math.ceil(imgs.length / 3);
         unified = true;
       } else {
         boxes = imgs.map((im) => {
-          if (vertical) return { w: target, h: Math.round(im.naturalHeight * (target / im.naturalWidth)) };
-          return { w: Math.round(im.naturalWidth * (target / im.naturalHeight)), h: target };
+          if (vertical) return { w: target, h: Math.max(1, Math.round(srcH(im) * (target / srcW(im)))) };
+          return { w: Math.max(1, Math.round(srcW(im) * (target / srcH(im)))), h: target };
         });
-        unified = new Set(imgs.map(m => vertical ? m.naturalWidth : m.naturalHeight)).size > 1;
+        unified = new Set(imgs.map(m => vertical ? srcW(m) : srcH(m))).size > 1;
       }
 
       // 累计偏移预先算好，避免绘制循环内反复 slice+reduce（O(n²)）
@@ -859,18 +1064,36 @@
       const computeOffsets = () => {
         offsets = [];
         let acc = 0;
-        for (let i = 0; i < boxes.length; i++) { offsets.push(acc); acc += vertical ? boxes[i].h : boxes[i].w; }
+        for (let i = 0; i < boxes.length; i++) {
+          offsets.push(acc);
+          acc += (vertical ? boxes[i].h : boxes[i].w) + (i < boxes.length - 1 ? gapE : 0);
+        }
         return acc;
       };
 
       const computeTotals = () => {
         const span = computeOffsets();
-        if (gridMode) { width = boxes[0].w * cols; height = boxes[0].h * rowsN; }
+        if (gridMode) { width = boxes[0].w * cols + (cols - 1) * gapE; height = boxes[0].h * rowsN + (rowsN - 1) * gapE; }
         else if (vertical) { width = boxes[0].w; height = span; }
         else { height = boxes[0].h; width = span; }
+        width += marginE * 2; height += marginE * 2;
       };
       let width, height;
       computeTotals();
+
+      // 最长边限制：0 = 不限制
+      const maxEdge = Math.max(0, +$('#maxEdge').value || 0);
+      let capNote = '';
+      if (maxEdge > 0) {
+        const long = Math.max(width, height);
+        if (long > maxEdge) {
+          const k = maxEdge / long;
+          for (const b of boxes) { b.w = Math.max(1, Math.round(b.w * k)); b.h = Math.max(1, Math.round(b.h * k)); }
+          gapE = Math.round(gapE * k); marginE = Math.round(marginE * k); radiusE = Math.round(radiusE * k);
+          computeTotals();
+          capNote = '已按最长边 ' + maxEdge + ' px 缩小';
+        }
+      }
 
       // 浏览器画布尺寸上限保护：超出时整体等比缩小输出，避免编码失败
       const MAX_DIM = 16384, MAX_AREA = 100e6;
@@ -881,6 +1104,7 @@
         for (let guard = 0; over > 1 && guard < 8; guard++) {
           const k = 1 / (over * 1.01);
           for (const b of boxes) { b.w = Math.max(1, Math.round(b.w * k)); b.h = Math.max(1, Math.round(b.h * k)); }
+          gapE = Math.round(gapE * k); marginE = Math.round(marginE * k); radiusE = Math.round(radiusE * k);
           computeTotals();
           over = Math.max(width / MAX_DIM, height / MAX_DIM, (width * height) / MAX_AREA);
         }
@@ -888,40 +1112,72 @@
         setMsg('图片总尺寸过大，已自动缩小输出，编码中…');
       }
 
-      const fmt = document.querySelector('input[name="format"]:checked').value; // webp | mozjpeg | avif
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('无法创建画布');
-      // 九宫格模式铺黑底（空白格为黑），非九宫格仅 mozJPEG 铺白底（jpg 无透明通道）
-      if (gridMode || fmt === 'mozjpeg') {
-        ctx.fillStyle = gridMode ? '#000000' : '#ffffff';
+      // 背景填充规则：有样式时用所选背景色；否则保持原行为（九宫格黑底、jpg 白底、其余透明）
+      const bgFill = useStyle ? bgColor : (gridMode ? '#000000' : (fmt === 'mozjpeg' ? '#ffffff' : null));
+      if (bgFill) {
+        ctx.fillStyle = bgFill;
         ctx.fillRect(0, 0, width, height);
       }
+      const roundRectPath = (c, x, y, w, h, r) => {
+        r = Math.max(0, Math.min(r, w / 2, h / 2));
+        c.beginPath();
+        if (c.roundRect) { c.roundRect(x, y, w, h, r); return; }
+        c.moveTo(x + r, y);
+        c.arcTo(x + w, y, x + w, y + h, r);
+        c.arcTo(x + w, y + h, x, y + h, r);
+        c.arcTo(x, y + h, x, y, r);
+        c.arcTo(x, y, x + w, y, r);
+        c.closePath();
+      };
 
       imgs.forEach((im, i) => {
         const b = boxes[i];
+        let dx, dy;
         if (gridMode) {
           const r = Math.floor(i / 3), c = i % 3;
-          let dx = c * b.w, dy = r * b.h;
+          dx = marginE + c * (b.w + gapE);
+          dy = marginE + r * (b.h + gapE);
           if (r === rowsN - 1) {
             // 末排居中：偏移量吸附到整数像素，避免 drawImage 亚像素插值造成的边缘模糊
-            const shift = ((3 - (imgs.length - (rowsN - 1) * 3)) / 2) * b.w;
-            dx = Math.round(dx + shift);
+            const rem = imgs.length - (rowsN - 1) * 3;
+            dx = Math.round(dx + ((3 - rem) / 2) * (b.w + gapE));
           }
-          const s = Math.max(im.naturalWidth / b.w, im.naturalHeight / b.h);
-          const sw = b.w * s, sh = b.h * s;
-          ctx.drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, dx, dy, b.w, b.h);
+        } else {
+          dx = marginE + (vertical ? 0 : offsets[i]);
+          dy = marginE + (vertical ? offsets[i] : 0);
+        }
+        const sw = srcW(im), sh = srcH(im);
+        if (radiusE > 0) {
+          ctx.save();
+          roundRectPath(ctx, dx, dy, b.w, b.h, radiusE);
+          ctx.clip();
+          if (gridMode) {
+            const s = Math.max(sw / b.w, sh / b.h);
+            const cw2 = b.w * s, ch2 = b.h * s;
+            ctx.drawImage(im, (sw - cw2) / 2, (sh - ch2) / 2, cw2, ch2, dx, dy, b.w, b.h);
+          } else {
+            ctx.drawImage(im, dx, dy, b.w, b.h);
+          }
+          ctx.restore();
           return;
         }
-        const px = vertical ? 0 : offsets[i];
-        const py = vertical ? offsets[i] : 0;
-        ctx.drawImage(im, px, py, b.w, b.h);
+        if (gridMode) {
+          const s = Math.max(sw / b.w, sh / b.h);
+          const cw2 = b.w * s, ch2 = b.h * s;
+          ctx.drawImage(im, (sw - cw2) / 2, (sh - ch2) / 2, cw2, ch2, dx, dy, b.w, b.h);
+          return;
+        }
+        ctx.drawImage(im, dx, dy, b.w, b.h);
       });
+      // 解码位图用完即释放，控制内存峰值
+      imgs.forEach((im) => { if (im.close) im.close(); });
 
       const srcTotal = items.reduce((s, it) => s + it.file.size, 0);
 
-      let blob, qualityNote, engineNote;
       if (!encoderCache[fmt]) {
         setMsg('正在加载 ' + FMT_LABEL[fmt] + ' 编码器…');
         await new Promise(r => setTimeout(r, 30));
@@ -932,16 +1188,18 @@
         const s = Math.round((Date.now() - encodeT0) / 1000);
         setMsg(fmt === 'avif' ? 'AVIF 编码中（较慢）… 已用时 ' + s + ' 秒' : '编码中… 已用时 ' + s + ' 秒');
       }, 1000);
+      let blob, qualityNote, engineNote;
       try {
         try {
-          blob = await squooshEncode(canvas, fmt);
-          qualityNote = '质量 ' + (fmt === 'avif' ? 50 : 75) + '（Squoosh 默认）';
-          engineNote = '压缩引擎（Squoosh WASM）';
+          const r = await encodeImage(canvas, fmt, encodeOptions);
+          blob = r.blob;
+          qualityNote = '质量 ' + quality;
+          engineNote = r.engine === 'worker' ? '压缩引擎（Squoosh WASM · Worker）' : '压缩引擎（Squoosh WASM · 主线程）';
         } catch (err) {
           if (fmt === 'avif') throw new Error('AVIF 编码器加载失败（需联网加载 WASM），请检查网络后重试');
           const mime = fmt === 'webp' ? 'image/webp' : 'image/jpeg';
-          blob = await canvasToBlob(canvas, mime, 0.75);
-          qualityNote = '质量 75（原生回退）';
+          blob = await canvasToBlob(canvas, mime, quality / 100);
+          qualityNote = '质量 ' + quality + '（原生回退）';
           engineNote = 'WASM 编码器加载失败，已用浏览器原生编码';
         }
       } finally {
@@ -965,6 +1223,7 @@
                                ' · ' + qualityNote + ' · ' + engineNote +
                                (gridMode ? ' · 已统一单元格（居中裁切）' : (unified ? ' · 已统一' + (vertical ? '宽度' : '高度') : '')) +
                                (shrinkNote ? ' · ' + shrinkNote : '') +
+                               (capNote ? ' · ' + capNote : '') +
                                (srcTotal > 0 ? ' · 原图合计 ' + fmtSize(srcTotal) +
                                  (saved >= 0 ? '，节省 ' + saved + '%' : '，比原图大 ' + (-saved) + '%') : '');
       result.hidden = false;
@@ -990,6 +1249,9 @@
     setMsg('');
     document.querySelector('input[name="mode"][value="vertical"]').checked = true;
     document.querySelector('input[name="format"][value="mozjpeg"]').checked = true;
+    $('#maxEdge').value = 0; $('#gapPx').value = 0; $('#marginPx').value = 0; $('#radiusPx').value = 0;
+    $('#bgColor').value = '#ffffff'; $('#avifSpeed').value = '6';
+    syncMergeFmtUI(true);
   });
 
   /* ================= 工具二：九宫格切割 ================= */
@@ -1028,18 +1290,18 @@
   cutBtn.addEventListener('click', async () => {
     if (!gridState) return;
     const n = +document.querySelector('input[name="gridN"]:checked').value;
-    const fmt = document.querySelector('input[name="gridFmt"]:checked').value; // png | jpeg
-    const mime = fmt === 'png' ? 'image/png' : 'image/jpeg';
+    const fmt = document.querySelector('input[name="gridFmt"]:checked').value; // png | jpeg | webp
+    const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
     cutBtn.disabled = true;
     setGridMsg('切割中…');
     try {
-      const im = await loadImg(gridState.url);
-      const side = Math.min(im.naturalWidth, im.naturalHeight);
+      const im = await decodeSource(gridState.file);
+      const side = Math.min(srcW(im), srcH(im));
       const tile = Math.floor(side / n);
       if (tile < 1) throw new Error('图片太小，无法切割');
       const gridPix = tile * n;
       const sOff = (side - gridPix) / 2;
-      const sx0 = (im.naturalWidth - side) / 2, sy0 = (im.naturalHeight - side) / 2;
+      const sx0 = (srcW(im) - side) / 2, sy0 = (srcH(im) - side) / 2;
 
       clearGridTiles();
       const base = ((gridState.file.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
@@ -1060,7 +1322,9 @@
         if (fmt === 'jpeg') { cx.fillStyle = '#000000'; cx.fillRect(0, 0, tile, tile); }
         cx.drawImage(im, job.sx, job.sy, tile, tile, 0, 0, tile, tile);
         // 编码完成后立即释放画布，控制内存峰值
-        const blob = await canvasToBlob(cv, mime, 0.92);
+        let blob;
+        if (fmt === 'webp') blob = (await encodeImage(cv, 'webp', { quality: 80 })).blob;
+        else blob = await canvasToBlob(cv, mime, 0.92);
         cv.width = cv.height = 0;
         finished++;
         if (finished % n === 0 || finished === jobs.length) {
@@ -1090,7 +1354,9 @@
         tilesBox.append(cell);
       });
 
-      gridInfo.textContent = '原图 ' + im.naturalWidth + ' × ' + im.naturalHeight + ' px → 居中裁切 ' +
+      const gw = srcW(im), gh = srcH(im);
+      if (im.close) im.close();
+      gridInfo.textContent = '原图 ' + gw + ' × ' + gh + ' px → 居中裁切 ' +
         gridPix + ' × ' + gridPix + ' px，每块 ' + tile + ' × ' + tile + ' px · 共 ' + gridTiles.length + ' 块 · ' + fmt.toUpperCase();
       gridResult.hidden = false;
       setGridMsg('切割完成，共 ' + gridTiles.length + ' 块');
@@ -1200,6 +1466,235 @@
     document.querySelector('input[name="gridFmt"][value="png"]').checked = true;
   });
 
+  /* ================= 工具三：图片压缩 ================= */
+
+  const cDrop = $('#compressDrop'), cFileInput = $('#compressFileInput');
+  const compressBtn = $('#compressBtn'), cResetBtn = $('#compressResetBtn'), cMsg = $('#compressMsg');
+  const cList = $('#compressList'), cListHeader = $('#cListHeader'), cCount = $('#cCount');
+  const cResult = $('#compressResult'), cResults = $('#compressResults'), cInfo = $('#compressInfo'), cZipBtn = $('#cZipBtn');
+  let cItems = [];      // { uid, file, url }
+  let cResultsArr = []; // { name, blob, url, origSize }
+  let cZipUrl = null;
+
+  const setCMsg = (text, isErr = false) => { cMsg.textContent = text; cMsg.classList.toggle('err', isErr); };
+
+  function compressAddFiles(list) {
+    const files = Array.from(list || []).filter(isImageFile);
+    if (!files.length) return setCMsg('未识别到图片文件', true);
+    for (const f of files) cItems.push({ uid: ++uidSeed, file: f, url: URL.createObjectURL(f) });
+    cItems.sort((a, b) => collator.compare(a.file.name || '', b.file.name || ''));
+    renderCList();
+    setCMsg('已添加 ' + files.length + ' 张，共 ' + cItems.length + ' 张（按文件名排序）');
+  }
+
+  function renderCList() {
+    cList.innerHTML = '';
+    cListHeader.hidden = !cItems.length;
+    cCount.textContent = '共 ' + cItems.length + ' 张';
+    cItems.forEach((it) => {
+      const row = document.createElement('div');
+      row.className = 'file-item static';
+      const img = document.createElement('img');
+      img.className = 'thumb'; img.src = it.url; img.alt = '';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = document.createElement('div');
+      name.className = 'name'; name.textContent = it.file.name || '(粘贴的图片)';
+      const sub = document.createElement('div');
+      sub.className = 'sub'; sub.textContent = fmtSize(it.file.size);
+      meta.append(name, sub);
+      const ops = document.createElement('div');
+      ops.className = 'ops';
+      const del = document.createElement('button');
+      del.className = 'icon-btn'; del.type = 'button'; del.textContent = '✕'; del.title = '移除';
+      del.dataset.op = 'del';
+      ops.append(del);
+      row.append(img, meta, ops);
+      cList.append(row);
+    });
+  }
+
+  cList.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.icon-btn') : null;
+    if (!btn) return;
+    const row = btn.closest('.file-item');
+    const idx = Array.from(cList.children).indexOf(row);
+    if (idx < 0) return;
+    URL.revokeObjectURL(cItems[idx].url);
+    cItems.splice(idx, 1);
+    renderCList();
+  });
+
+  cDrop.addEventListener('click', () => cFileInput.click());
+  cDrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cFileInput.click(); }
+  });
+  cFileInput.addEventListener('change', () => { compressAddFiles(cFileInput.files); cFileInput.value = ''; });
+
+  compressBtn.addEventListener('click', async () => {
+    if (!cItems.length) return setCMsg('请先添加图片', true);
+    compressBtn.disabled = true;
+    try {
+      const fmt = document.querySelector('input[name="cFmt"]:checked').value;
+      const quality = Math.max(30, Math.min(100, +$('#cQuality').value || 75));
+      const options = fmt === 'avif' ? { quality, speed: +$('#cAvifSpeed').value || 6 } : { quality };
+      cResultsArr.forEach(r => URL.revokeObjectURL(r.url));
+      cResultsArr = [];
+      cResult.hidden = true;
+      cResults.innerHTML = '';
+
+      let done = 0;
+      const outs = await mapLimit(cItems, 4, async (it) => {
+        const src = await decodeSource(it.file);
+        let bw = srcW(src), bh = srcH(src);
+        // 画布尺寸上限保护
+        const overC = Math.max(bw / 16384, bh / 16384, (bw * bh) / 100e6);
+        if (overC > 1) {
+          const k = 1 / (overC * 1.01);
+          bw = Math.max(1, Math.round(bw * k)); bh = Math.max(1, Math.round(bh * k));
+        }
+        const cv = document.createElement('canvas');
+        cv.width = bw; cv.height = bh;
+        const cx = cv.getContext('2d');
+        if (!cx) throw new Error('无法创建画布');
+        cx.drawImage(src, 0, 0, bw, bh);
+        if (src.close) src.close();
+        const { blob, engine } = await encodeImage(cv, fmt, options);
+        done++;
+        setCMsg('压缩中… ' + done + ' / ' + cItems.length);
+        const base = ((it.file.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
+        return { name: base + '.' + EXT[fmt], blob, origSize: it.file.size, engine };
+      });
+
+      outs.forEach((o) => {
+        const url = URL.createObjectURL(o.blob);
+        cResultsArr.push({ name: o.name, blob: o.blob, url, origSize: o.origSize });
+        const row = document.createElement('div');
+        row.className = 'c-row';
+        const nm = document.createElement('span');
+        nm.className = 'c-name'; nm.textContent = o.name;
+        const delta = document.createElement('span');
+        delta.className = 'c-delta';
+        const savedPct = o.origSize > 0 ? Math.round((1 - o.blob.size / o.origSize) * 100) : 0;
+        delta.textContent = fmtSize(o.origSize) + ' → ' + fmtSize(o.blob.size) +
+          (savedPct >= 0 ? '（省 ' + savedPct + '%）' : '（大 ' + (-savedPct) + '%）');
+        const dl = document.createElement('a');
+        dl.href = url; dl.download = o.name; dl.textContent = '下载';
+        row.append(nm, delta, dl);
+        cResults.append(row);
+      });
+
+      const origTotal = cResultsArr.reduce((s, r) => s + r.origSize, 0);
+      const newTotal = cResultsArr.reduce((s, r) => s + r.blob.size, 0);
+      const anyMain = outs.some(o => o.engine !== 'worker');
+      cInfo.textContent = cResultsArr.length + ' 张 · 合计 ' + fmtSize(origTotal) + ' → ' + fmtSize(newTotal) +
+        (origTotal > 0 ? '（省 ' + Math.max(0, Math.round((1 - newTotal / origTotal) * 100)) + '%）' : '') +
+        ' · 质量 ' + quality + ' · ' + (anyMain ? '部分经主线程编码' : 'Squoosh WASM（Worker 后台编码）');
+      cZipBtn.hidden = cResultsArr.length < 2;
+      cResult.hidden = false;
+      setCMsg('压缩完成，共 ' + cResultsArr.length + ' 张');
+      cResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      setCMsg('压缩失败：' + err.message, true);
+    }
+    compressBtn.disabled = false;
+  });
+
+  cZipBtn.addEventListener('click', async () => {
+    if (!cResultsArr.length || cZipBtn.disabled) return;
+    cZipBtn.disabled = true;
+    try {
+      setCMsg('正在打包 ZIP…');
+      const blob = await makeZip(cResultsArr);
+      if (cZipUrl) URL.revokeObjectURL(cZipUrl);
+      cZipUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = cZipUrl;
+      a.download = 'compressed-' + document.querySelector('input[name="cFmt"]:checked').value + '.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setCMsg('已打包 ' + cResultsArr.length + ' 张（' + fmtSize(blob.size) + '）为 ZIP');
+    } catch (err) {
+      setCMsg('打包失败：' + err.message, true);
+    }
+    cZipBtn.disabled = false;
+  });
+
+  cResetBtn.addEventListener('click', () => {
+    cItems.forEach(it => URL.revokeObjectURL(it.url));
+    cItems = [];
+    cResultsArr.forEach(r => URL.revokeObjectURL(r.url));
+    cResultsArr = [];
+    if (cZipUrl) { URL.revokeObjectURL(cZipUrl); cZipUrl = null; }
+    renderCList();
+    cResult.hidden = true;
+    cResults.innerHTML = '';
+    setCMsg('');
+    $('#cAvifSpeed').value = '6';
+    syncCompressFmtUI(true);
+  });
+
+  /* ================= 共用：设置记忆（只存选项，不存任何图片数据） ================= */
+
+  const SETTINGS_KEY = 'pingtu-settings-v1';
+  const settingsMap = [
+    ['mode', 'mode', 'radio'], ['format', 'format', 'radio'],
+    ['quality', 'quality'], ['maxEdge', 'maxEdge'],
+    ['gapPx', 'gap'], ['marginPx', 'margin'], ['radiusPx', 'radius'], ['bgColor', 'bg'], ['avifSpeed', 'avifSpeed'],
+    ['gridN', 'gridN', 'radio'], ['gridFmt', 'gridFmt', 'radio'],
+    ['cFmt', 'cFmt', 'radio'], ['cQuality', 'cQuality'], ['cAvifSpeed', 'cAvifSpeed'],
+  ];
+  function saveSettings() {
+    try {
+      const s = {};
+      for (const [name, key, kind] of settingsMap) {
+        const el = kind === 'radio'
+          ? document.querySelector('input[name="' + name + '"]:checked')
+          : document.getElementById(name);
+        if (el) s[key] = el.value;
+      }
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    } catch (_) {}
+  }
+  function loadSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+      if (!s) return;
+      for (const [name, key, kind] of settingsMap) {
+        if (!(key in s)) continue;
+        if (kind === 'radio') {
+          const el = document.querySelector('input[name="' + name + '"][value="' + s[key] + '"]');
+          if (el) el.checked = true;
+        } else {
+          const el = document.getElementById(name);
+          if (el) el.value = s[key];
+        }
+      }
+    } catch (_) {}
+  }
+  const defaultQualityFor = (fmt) => (fmt === 'avif' ? 50 : 75);
+  function syncMergeFmtUI(resetQuality) {
+    const fmt = document.querySelector('input[name="format"]:checked').value;
+    $('#avifSpeedWrap').hidden = fmt !== 'avif';
+    if (resetQuality) $('#quality').value = defaultQualityFor(fmt);
+    $('#qualityVal').textContent = $('#quality').value;
+  }
+  function syncCompressFmtUI(resetQuality) {
+    const fmt = document.querySelector('input[name="cFmt"]:checked').value;
+    $('#cAvifSpeedWrap').hidden = fmt !== 'avif';
+    if (resetQuality) $('#cQuality').value = defaultQualityFor(fmt);
+    $('#cQualityVal').textContent = $('#cQuality').value;
+  }
+  document.querySelectorAll('input[name="format"]').forEach(r => r.addEventListener('change', () => syncMergeFmtUI(true)));
+  document.querySelectorAll('input[name="cFmt"]').forEach(r => r.addEventListener('change', () => syncCompressFmtUI(true)));
+  $('#quality').addEventListener('input', () => { $('#qualityVal').textContent = $('#quality').value; });
+  $('#cQuality').addEventListener('input', () => { $('#cQualityVal').textContent = $('#cQuality').value; });
+  let saveTimer = null;
+  const queueSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 300); };
+  document.addEventListener('change', queueSave, true);
+  document.addEventListener('input', queueSave, true);
+
   /* ================= 共用：一键回顶 / 到底 ================= */
 
   const jumpTop = $('#jumpTop'), jumpBottom = $('#jumpBottom');
@@ -1212,6 +1707,11 @@
   window.addEventListener('scroll', updateJumpBtns, { passive: true });
   window.addEventListener('resize', updateJumpBtns);
   updateJumpBtns();
+
+  // 启动时恢复上次的选项，再同步格式相关的 UI 显隐
+  loadSettings();
+  syncMergeFmtUI(false);
+  syncCompressFmtUI(false);
 })();
 </script>
 </body>
