@@ -272,7 +272,7 @@
         <div class="drop" id="drop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片文件">+ 选择 / 拖拽 / 粘贴 文件至此</div>
         <input type="file" id="fileInput" accept="image/*" multiple hidden>
       </div>
-      <p class="hint">提示：可从文件管理器把图片直接拖到页面任意位置添加，将按文件名自动排序；也可以在列表中按住条目上下拖动，手动调整顺序。</p>
+      <p class="hint">提示：可从文件管理器把图片或整个文件夹直接拖到页面任意位置添加（文件夹会递归读取其中的图片），将按文件名自动排序；也可以在列表中按住条目上下拖动，手动调整顺序。</p>
 
       <div class="file-list-header" id="listHeader" hidden>
         <span id="listCount"></span>
@@ -333,7 +333,7 @@
         <p class="info" id="gridInfo"></p>
         <div class="tiles" id="tiles"></div>
         <div class="actions" style="margin-top:16px">
-          <button class="btn btn-blue" id="dlAllBtn" type="button">全部下载</button>
+          <button class="btn btn-blue" id="dlAllBtn" type="button">打包下载 ZIP</button>
         </div>
       </section>
     </section>
@@ -400,6 +400,10 @@
 
   const fmtSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB';
 
+  // 图片判定：优先按 MIME；文件夹遍历出的文件 type 可能为空，再用扩展名兜底
+  const IMG_EXT_RE = /\.(jpe?g|png|gif|webp|bmp|avif|svg|ico|heic|heif|tiff?)$/i;
+  const isImageFile = (f) => !!(f.type && f.type.startsWith('image/')) || IMG_EXT_RE.test(f.name || '');
+
   function setMsg(text, isErr = false) { msg.textContent = text; msg.classList.toggle('err', isErr); }
 
   function sortByName() {
@@ -415,7 +419,7 @@
   function addFiles(list) {
     let added = 0;
     for (const f of list) {
-      if (!f || !f.type || !f.type.startsWith('image/')) continue;
+      if (!f || !isImageFile(f)) continue;
       items.push({ uid: ++uidSeed, file: f, url: URL.createObjectURL(f) });
       added++;
     }
@@ -663,18 +667,52 @@
     dragDepth = Math.max(0, dragDepth - 1);
     if (!dragDepth) dropOverlay.hidden = true;
   });
-  window.addEventListener('drop', (e) => {
+
+  // 文件夹遍历：FileSystemEntry 为回调式 API，readEntries 需循环读到空才算读完
+  const readDirEntries = (dir) => new Promise((resolve) => {
+    const reader = dir.createReader();
+    const all = [];
+    const step = () => reader.readEntries((es) => {
+      if (es.length) { all.push(...es); step(); }
+      else resolve(all);
+    }, () => resolve(all));
+    step();
+  });
+  const entryFile = (entry) => new Promise((res) => entry.file(res, () => res(null)));
+  async function walkEntry(entry, out) {
+    if (!entry) return;
+    if (entry.isFile) { const f = await entryFile(entry); if (f) out.push(f); }
+    else if (entry.isDirectory) {
+      const kids = await readDirEntries(entry);
+      for (const k of kids) await walkEntry(k, out);
+    }
+  }
+
+  window.addEventListener('drop', async (e) => {
     e.preventDefault();
     dragDepth = 0;
     dropOverlay.hidden = true;
     if (dragUid) return; // 列表内排序的拖放，不当作外部文件
-    if (e.dataTransfer && e.dataTransfer.files.length) {
-      currentTool === 'grid' ? gridAddFiles(e.dataTransfer.files) : addFiles(e.dataTransfer.files);
-    } else if (currentTool === 'grid') {
-      setGridMsg('未识别到图片文件（不支持整个文件夹，请选中图片后拖入）', true);
-    } else {
-      setMsg('未识别到图片文件（不支持整个文件夹，请选中图片后拖入）', true);
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const setCurMsg = (t, isErr) => (currentTool === 'grid' ? setGridMsg(t, isErr) : setMsg(t, isErr));
+    // webkitGetAsEntry 只能在 drop 事件内同步调用，事件结束后 DataTransferItem 即失效
+    const entries = [], plainFiles = [];
+    for (const item of Array.from(dt.items || [])) {
+      if (item.kind !== 'file') continue;
+      const en = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (en) entries.push(en);
+      else { const f = item.getAsFile(); if (f) plainFiles.push(f); }
     }
+    if (!entries.length && !dt.files.length) return setCurMsg('未识别到图片文件', true);
+    const hasFolder = entries.some(en => en.isDirectory);
+    if (hasFolder) setCurMsg('正在读取文件夹…');
+    const out = plainFiles.slice();
+    for (const en of entries) await walkEntry(en, out);
+    const files = out.length ? out : Array.from(dt.files || []);
+    const imgs = files.filter(isImageFile);
+    if (!imgs.length) return setCurMsg(hasFolder ? '文件夹中没有找到图片文件' : '未识别到图片文件', true);
+    currentTool === 'grid' ? gridAddFiles(imgs) : addFiles(imgs);
   });
   window.addEventListener('dragend', () => { dragDepth = 0; dropOverlay.hidden = true; });
 
@@ -883,25 +921,31 @@
 
       const srcTotal = items.reduce((s, it) => s + it.file.size, 0);
 
+      let blob, qualityNote, engineNote;
       if (!encoderCache[fmt]) {
         setMsg('正在加载 ' + FMT_LABEL[fmt] + ' 编码器…');
         await new Promise(r => setTimeout(r, 30));
-      } else {
-        setMsg(fmt === 'avif' ? 'AVIF 编码中（较慢，大图可能需要数十秒）…' : '编码中…');
-        await new Promise(r => setTimeout(r, 30));
       }
-
-      let blob, qualityNote, engineNote;
+      // 编码期间每秒刷新已用时：AVIF 较慢，让用户知道页面没有卡死
+      const encodeT0 = Date.now();
+      const encodeTick = setInterval(() => {
+        const s = Math.round((Date.now() - encodeT0) / 1000);
+        setMsg(fmt === 'avif' ? 'AVIF 编码中（较慢）… 已用时 ' + s + ' 秒' : '编码中… 已用时 ' + s + ' 秒');
+      }, 1000);
       try {
-        blob = await squooshEncode(canvas, fmt);
-        qualityNote = '质量 ' + (fmt === 'avif' ? 50 : 75) + '（Squoosh 默认）';
-        engineNote = '压缩引擎（Squoosh WASM）';
-      } catch (err) {
-        if (fmt === 'avif') throw new Error('AVIF 编码器加载失败（需联网加载 WASM），请检查网络后重试');
-        const mime = fmt === 'webp' ? 'image/webp' : 'image/jpeg';
-        blob = await canvasToBlob(canvas, mime, 0.75);
-        qualityNote = '质量 75（原生回退）';
-        engineNote = 'WASM 编码器加载失败，已用浏览器原生编码';
+        try {
+          blob = await squooshEncode(canvas, fmt);
+          qualityNote = '质量 ' + (fmt === 'avif' ? 50 : 75) + '（Squoosh 默认）';
+          engineNote = '压缩引擎（Squoosh WASM）';
+        } catch (err) {
+          if (fmt === 'avif') throw new Error('AVIF 编码器加载失败（需联网加载 WASM），请检查网络后重试');
+          const mime = fmt === 'webp' ? 'image/webp' : 'image/jpeg';
+          blob = await canvasToBlob(canvas, mime, 0.75);
+          qualityNote = '质量 75（原生回退）';
+          engineNote = 'WASM 编码器加载失败，已用浏览器原生编码';
+        }
+      } finally {
+        clearInterval(encodeTick);
       }
       // 浏览器可能返回带参数（如 ;charset=）或空 type 的 Blob，此处做容错判断
       const actualType = (blob.type || '').split(';')[0].trim().toLowerCase();
@@ -954,7 +998,8 @@
   const cutBtn = $('#cutBtn'), gridResetBtn = $('#gridResetBtn'), gridMsg = $('#gridMsg');
   const gridResult = $('#gridResult'), gridInfo = $('#gridInfo'), tilesBox = $('#tiles'), dlAllBtn = $('#dlAllBtn');
   let gridState = null; // { file, url }
-  let gridTiles = [];   // { name, url }
+  let gridTiles = [];   // { name, url, blob }
+  let zipName = 'tiles.zip';
 
   const setGridMsg = (text, isErr = false) => { gridMsg.textContent = text; gridMsg.classList.toggle('err', isErr); };
   const clearGridTiles = () => {
@@ -964,7 +1009,7 @@
   };
 
   function gridAddFiles(list) {
-    const f = Array.from(list || []).find(f => f && f.type && f.type.startsWith('image/'));
+    const f = Array.from(list || []).find(isImageFile);
     if (!f) return setGridMsg('未识别到图片文件', true);
     if (gridState) URL.revokeObjectURL(gridState.url);
     clearGridTiles();
@@ -1027,8 +1072,9 @@
       blobs.forEach((blob, i) => {
         const { r, c } = jobs[i];
         const name = base + '_' + (r + 1) + 'x' + (c + 1) + '.' + fmt;
-        gridTiles.push({ name, url: URL.createObjectURL(blob) });
+        gridTiles.push({ name, url: URL.createObjectURL(blob), blob });
       });
+      zipName = base + '_' + n + 'x' + n + '.zip';
 
       tilesBox.style.gridTemplateColumns = 'repeat(' + n + ', 1fr)';
       gridTiles.forEach(t => {
@@ -1055,17 +1101,92 @@
     cutBtn.disabled = false;
   });
 
+  // —— 最小 ZIP 打包（仅 store 不压缩：PNG/JPEG 本身已是压缩格式；单文件 < 4GB 无需 ZIP64）——
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  const crc32 = (u8) => {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  };
+  async function makeZip(files) { // files: [{ name, blob }]
+    const enc = new TextEncoder();
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = (((now.getFullYear() - 1980) & 0x7f) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const chunks = [], central = [];
+    let offset = 0;
+    for (const f of files) {
+      const data = new Uint8Array(await f.blob.arrayBuffer());
+      const nameBytes = enc.encode(f.name);
+      const crc = crc32(data);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true);
+      lh.setUint16(4, 20, true);       // 版本 2.0
+      lh.setUint16(6, 0x0800, true);   // UTF-8 文件名标志
+      lh.setUint16(8, 0, true);        // store
+      lh.setUint16(10, dosTime, true);
+      lh.setUint16(12, dosDate, true);
+      lh.setUint32(14, crc, true);
+      lh.setUint32(18, data.length, true);
+      lh.setUint32(22, data.length, true);
+      lh.setUint16(26, nameBytes.length, true);
+      chunks.push(new Uint8Array(lh.buffer), nameBytes, data);
+      central.push({ nameBytes, crc, size: data.length, offset });
+      offset += 30 + nameBytes.length + data.length;
+    }
+    const cdStart = offset;
+    for (const c of central) {
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true);
+      cd.setUint16(4, 20, true);
+      cd.setUint16(6, 20, true);
+      cd.setUint16(8, 0x0800, true);
+      cd.setUint16(12, dosTime, true);
+      cd.setUint16(14, dosDate, true);
+      cd.setUint32(16, c.crc, true);
+      cd.setUint32(20, c.size, true);
+      cd.setUint32(24, c.size, true);
+      cd.setUint16(28, c.nameBytes.length, true);
+      cd.setUint32(42, c.offset, true);
+      chunks.push(new Uint8Array(cd.buffer), c.nameBytes);
+      offset += 46 + c.nameBytes.length;
+    }
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true);
+    eocd.setUint16(8, central.length, true);
+    eocd.setUint16(10, central.length, true);
+    eocd.setUint32(12, offset - cdStart, true);
+    eocd.setUint32(16, cdStart, true);
+    chunks.push(new Uint8Array(eocd.buffer));
+    return new Blob(chunks, { type: 'application/zip' });
+  }
+
   dlAllBtn.addEventListener('click', async () => {
-    if (!gridTiles.length) return;
-    setGridMsg('开始逐张下载（浏览器可能询问“允许下载多个文件”，请允许）…');
-    for (const t of gridTiles) {
+    if (!gridTiles.length || dlAllBtn.disabled) return;
+    dlAllBtn.disabled = true;
+    try {
+      setGridMsg('正在打包 ZIP…');
+      const blob = await makeZip(gridTiles);
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = t.url; a.download = t.name;
+      a.href = url; a.download = zipName;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      await new Promise(r => setTimeout(r, 350));
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setGridMsg('已打包 ' + gridTiles.length + ' 块（' + fmtSize(blob.size) + '）为 ZIP，无需浏览器多文件下载许可');
+    } catch (err) {
+      setGridMsg('打包失败：' + err.message, true);
     }
+    dlAllBtn.disabled = false;
   });
 
   gridResetBtn.addEventListener('click', () => {
