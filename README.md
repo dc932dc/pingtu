@@ -76,7 +76,7 @@ Squoosh WASM（Worker） → Squoosh WASM（主线程） → 浏览器原生 can
 |---|---|---|
 | mozJPEG | 75 | 渐进式、`optimize_coding` 开启，兼容性最好 |
 | WebP | 75 | method 4，体积与速度均衡 |
-| AVIF | 50 | speed 6（可选 8 / 10 提速），压缩率最高但编码最慢 |
+| AVIF | 50 | speed 10 默认（最快，可改 6 / 8 换更高压缩率），压缩率最高但编码最慢 |
 
 ---
 

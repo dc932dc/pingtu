@@ -6,6 +6,7 @@
 <title>拼接图片 · Combine Images</title>
 <style>
   :root {
+    color-scheme: dark; /* 原生控件（下拉弹层/取色器/数字框）统一走暗色 */
     --bg: #0a0d13;
     --border: rgba(255, 255, 255, .08);
     --border-strong: rgba(160, 185, 255, .25);
@@ -89,6 +90,7 @@
   .opts label:hover { color: #c6d6f5; }
   .opts label .desc { font-size: 12px; color: var(--faint); }
   input[type="radio"] { width: 14px; height: 14px; accent-color: var(--accent-deep); cursor: pointer; flex: none; }
+  select.sel option, option { background: #0d1117; color: #e7ecf5; }
 
   .drop {
     display: inline-block; color: #fff; font-size: 15px; letter-spacing: .02em;
@@ -288,7 +290,7 @@
           <label><input type="radio" name="format" value="mozjpeg" checked>mozJPEG <span class="desc">压缩后图片格式为 jpg，兼容性最好，所有浏览器支持</span></label>
           <label><input type="radio" name="format" value="avif">avif <span class="desc">压缩后图片格式为 avif，压缩率较高，部分现代浏览器支持</span></label>
           <label id="avifSpeedWrap" hidden>编码速度
-            <select id="avifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10">最快</option></select>
+            <select id="avifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10" selected>最快</option></select>
           </label>
         </div>
       </div>
@@ -307,7 +309,7 @@
           <label>间距(px) <input type="number" id="gapPx" class="num-input" min="0" value="0"></label>
           <label>边距(px) <input type="number" id="marginPx" class="num-input" min="0" value="0"></label>
           <label>圆角(px) <input type="number" id="radiusPx" class="num-input" min="0" value="0"></label>
-          <label>背景 <input type="color" id="bgColor" value="#ffffff"></label>
+          <label>背景 <input type="color" id="bgColor" value="#000000"></label>
         </div>
       </div>
 
@@ -398,7 +400,7 @@
           <label><input type="radio" name="cFmt" value="mozjpeg">mozJPEG <span class="desc">输出 jpg，兼容性最好</span></label>
           <label><input type="radio" name="cFmt" value="avif">avif <span class="desc">压缩率最高，编码最慢</span></label>
           <label id="cAvifSpeedWrap" hidden>编码速度
-            <select id="cAvifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10">最快</option></select>
+            <select id="cAvifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10" selected>最快</option></select>
           </label>
         </div>
       </div>
@@ -1250,7 +1252,7 @@
     document.querySelector('input[name="mode"][value="vertical"]').checked = true;
     document.querySelector('input[name="format"][value="mozjpeg"]').checked = true;
     $('#maxEdge').value = 0; $('#gapPx').value = 0; $('#marginPx').value = 0; $('#radiusPx').value = 0;
-    $('#bgColor').value = '#ffffff'; $('#avifSpeed').value = '6';
+    $('#bgColor').value = '#000000'; $('#avifSpeed').value = '10';
     syncMergeFmtUI(true);
   });
 
@@ -1631,13 +1633,13 @@
     cResult.hidden = true;
     cResults.innerHTML = '';
     setCMsg('');
-    $('#cAvifSpeed').value = '6';
+    $('#cAvifSpeed').value = '10';
     syncCompressFmtUI(true);
   });
 
   /* ================= 共用：设置记忆（只存选项，不存任何图片数据） ================= */
 
-  const SETTINGS_KEY = 'pingtu-settings-v1';
+  const SETTINGS_KEY = 'pingtu-settings-v2'; // v2：黑底/最快速度为新默认，弃用旧缓存
   const settingsMap = [
     ['mode', 'mode', 'radio'], ['format', 'format', 'radio'],
     ['quality', 'quality'], ['maxEdge', 'maxEdge'],
