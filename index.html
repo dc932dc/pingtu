@@ -224,6 +224,22 @@
   .lightbox img { max-width: 96vw; max-height: 96vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
   #resultImg, .tile img { cursor: zoom-in; }
 
+  /* 压缩前后对比 */
+  .cmp-wrap { position: relative; max-width: 92vw; max-height: 86vh; user-select: none; -webkit-user-select: none; }
+  .cmp-img { display: block; max-width: 92vw; max-height: 86vh; width: auto; height: auto; }
+  .cmp-overlay { position: absolute; top: 0; left: 0; height: 100%; width: 50%; overflow: hidden; }
+  .cmp-overlay .cmp-img { position: absolute; top: 0; left: 0; height: 100%; width: auto; max-width: none; }
+  .cmp-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: rgba(255, 255, 255, .85); pointer-events: none; }
+  .cmp-tag { position: absolute; top: 10px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; pointer-events: none; }
+  .cmp-tag-l { left: 10px; }
+  .cmp-tag-r { right: 10px; }
+  #cmpSlider { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 70%; accent-color: var(--accent-deep); cursor: ew-resize; }
+  .cmp-close {
+    position: absolute; top: -14px; right: -14px; width: 34px; height: 34px;
+    border-radius: 50%; border: 1px solid var(--border); background: #141a24;
+    color: var(--text); font-size: 16px; line-height: 1; cursor: pointer;
+  }
+
   /* 一键回顶 / 到底 */
   .jump {
     position: fixed; top: 50%; transform: translateY(-50%);
@@ -345,6 +361,26 @@
         </div>
       </div>
 
+      <div class="row" id="sec-watermark">
+        <span class="label">水印</span>
+        <div class="opts opts-col">
+          <label><input type="checkbox" id="wmEnable">启用文字水印</label>
+          <div class="opts" id="wmOpts" hidden>
+            <label>内容 <input type="text" id="wmText" class="num-input" style="width:150px" placeholder="如：@我的名字" maxlength="30"></label>
+            <label>字号 <input type="number" id="wmSize" class="num-input" min="8" max="200" value="24"></label>
+            <label>不透明度 <input type="range" id="wmOpacity" class="range-input" min="10" max="100" value="40"> <span class="desc" id="wmOpacityVal">40%</span></label>
+            <label>位置
+              <select id="wmPos" class="sel">
+                <option value="br" selected>右下</option><option value="bl">左下</option>
+                <option value="tr">右上</option><option value="tl">左上</option>
+                <option value="c">居中</option><option value="tile">平铺</option>
+              </select>
+            </label>
+            <label>颜色 <input type="color" id="wmColor" value="#ffffff"></label>
+          </div>
+        </div>
+      </div>
+
       <div class="row" id="sec-files">
         <span class="label">文件</span>
         <div class="drop" id="drop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片文件">+ 选择 / 拖拽 / 粘贴 文件至此</div>
@@ -371,6 +407,7 @@
         <img class="preview" id="resultImg" alt="合并结果预览">
         <p class="info" id="resultInfo"></p>
         <a class="btn btn-blue" id="downloadBtn" download>下载图片</a>
+        <p class="hint" style="margin-top:12px">输出已自动清除 EXIF 信息（含 GPS 定位、设备信息等隐私），可放心分享。</p>
       </section>
     </section>
 
@@ -466,6 +503,7 @@
         <div class="actions" style="margin-top:16px">
           <button class="btn btn-blue" id="cZipBtn" type="button" hidden>打包下载 ZIP</button>
         </div>
+        <p class="hint" style="margin-top:12px">输出已自动清除 EXIF 信息（含 GPS 定位、设备信息等隐私），可放心分享。点结果行的「对比」可拖动查看压缩前后画质。</p>
       </section>
     </section>
   </div>
@@ -477,6 +515,18 @@
 
 <div class="lightbox" id="lightbox" hidden>
   <img id="lightboxImg" alt="放大预览">
+</div>
+
+<div class="lightbox" id="compareBox" hidden>
+  <div class="cmp-wrap">
+    <img id="cmpOrig" class="cmp-img" alt="压缩前">
+    <div class="cmp-overlay" id="cmpOverlay"><img id="cmpComp" class="cmp-img" alt="压缩后"></div>
+    <div class="cmp-divider" id="cmpDivider"></div>
+    <span class="cmp-tag cmp-tag-l">压缩前</span>
+    <span class="cmp-tag cmp-tag-r">压缩后</span>
+    <input type="range" id="cmpSlider" min="0" max="100" value="50">
+    <button class="cmp-close" id="cmpClose" type="button" aria-label="关闭对比">×</button>
+  </div>
 </div>
 
 <nav class="toc" id="toc" aria-label="页面目录"></nav>
@@ -537,7 +587,7 @@
   const tocMap = {
     merge: [
       ['拼接模式', 'sec-mode'], ['压缩算法', 'sec-format'], ['质量/尺寸', 'sec-quality'],
-      ['拼接样式', 'sec-style'], ['文件', 'sec-files'], ['合并', 'sec-actions'], ['合并结果', 'result'],
+      ['拼接样式', 'sec-style'], ['水印', 'sec-watermark'], ['文件', 'sec-files'], ['合并', 'sec-actions'], ['合并结果', 'result'],
     ],
     grid: [
       ['文件', 'sec-grid-files'], ['切割规格', 'sec-grid-n'], ['输出格式', 'sec-grid-fmt'],
@@ -1012,6 +1062,33 @@
     try { return await loadImg(url); } finally { URL.revokeObjectURL(url); }
   }
 
+  // 文字水印：支持四角 / 居中 / 平铺
+  function drawWatermark(ctx, W, H, o) {
+    if (!o.text) return;
+    const pad = Math.round(o.size * 0.6);
+    ctx.save();
+    ctx.globalAlpha = o.opacity;
+    ctx.fillStyle = o.color;
+    ctx.font = '600 ' + o.size + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif';
+    const tw = ctx.measureText(o.text).width, th = o.size;
+    ctx.shadowColor = 'rgba(0, 0, 0, .3)';
+    ctx.shadowBlur = Math.round(o.size * 0.15);
+    if (o.pos === 'tile') {
+      const stepX = tw + o.size * 2.5, stepY = th * 3.5;
+      for (let y = th + pad; y < H + th; y += stepY)
+        for (let x = pad; x < W + tw; x += stepX) ctx.fillText(o.text, x, y);
+    } else {
+      const posMap = {
+        br: [W - tw - pad, H - pad], bl: [pad, H - pad],
+        tr: [W - tw - pad, th + pad], tl: [pad, th + pad],
+        c: [(W - tw) / 2, (H + th) / 2],
+      };
+      const [x, y] = posMap[o.pos] || posMap.br;
+      ctx.fillText(o.text, Math.max(pad, Math.min(W - tw - pad, x)), Math.max(th, Math.min(H - pad, y)));
+    }
+    ctx.restore();
+  }
+
   // —— 压缩引擎：与 PicX 相同的 Squoosh WASM 编码器（jSquash），质量用 Squoosh 默认值 ——
   // mozJPEG 75（progressive）· WebP 75 · AVIF 50/speed 6
   // 优先加载页面旁 encoders/ 目录的本地副本（离线可用），缺失时回退 CDN
@@ -1278,6 +1355,17 @@
       // 解码位图用完即释放，控制内存峰值
       imgs.forEach((im) => { if (im.close) im.close(); });
 
+      // 文字水印（在所有图片绘制完成后叠加）
+      if ($('#wmEnable').checked) {
+        drawWatermark(ctx, width, height, {
+          text: $('#wmText').value.trim(),
+          size: Math.max(8, Math.min(200, +$('#wmSize').value || 24)),
+          opacity: Math.max(0.1, Math.min(1, (+$('#wmOpacity').value || 40) / 100)),
+          pos: $('#wmPos').value,
+          color: $('#wmColor').value,
+        });
+      }
+
       const srcTotal = items.reduce((s, it) => s + it.file.size, 0);
 
       if (!encoderCache[fmt]) {
@@ -1353,6 +1441,9 @@
     document.querySelector('input[name="format"][value="mozjpeg"]').checked = true;
     $('#maxEdge').value = 0; $('#gapPx').value = 0; $('#marginPx').value = 0; $('#radiusPx').value = 0;
     $('#bgColor').value = '#000000'; $('#avifSpeed').value = '10';
+    $('#wmEnable').checked = false; $('#wmOpts').hidden = true;
+    $('#wmText').value = ''; $('#wmSize').value = 24; $('#wmOpacity').value = 40;
+    $('#wmOpacityVal').textContent = '40%'; $('#wmPos').value = 'br'; $('#wmColor').value = '#ffffff';
     syncMergeFmtUI(true);
   });
 
@@ -1728,12 +1819,12 @@
         done++;
         setCMsg('压缩中… ' + done + ' / ' + cItems.length);
         const base = ((it.file.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
-        return { name: base + '.' + EXT[fmt], blob, origSize: it.file.size, engine, qualityUsed, targetNote };
+        return { name: base + '.' + EXT[fmt], blob, origSize: it.file.size, engine, qualityUsed, targetNote, origUrl: it.url };
       });
 
       outs.forEach((o) => {
         const url = URL.createObjectURL(o.blob);
-        cResultsArr.push({ name: o.name, blob: o.blob, url, origSize: o.origSize });
+        cResultsArr.push({ name: o.name, blob: o.blob, url, origSize: o.origSize, origUrl: o.origUrl });
         const row = document.createElement('div');
         row.className = 'c-row';
         const nm = document.createElement('span');
@@ -1747,7 +1838,10 @@
           (targetBytes > 0 ? ' · 质量 ' + o.qualityUsed : '');
         const dl = document.createElement('a');
         dl.href = url; dl.download = o.name; dl.textContent = '下载';
-        row.append(nm, delta, dl);
+        const cmp = document.createElement('a');
+        cmp.textContent = '对比';
+        cmp.addEventListener('click', (e) => { e.preventDefault(); openCompare(o.origUrl, url); });
+        row.append(nm, delta, cmp, dl);
         cResults.append(row);
       });
 
@@ -1816,6 +1910,8 @@
     ['gridN', 'gridN', 'radio'], ['gridFmt', 'gridFmt', 'radio'],
     ['cFmt', 'cFmt', 'radio'], ['cQuality', 'cQuality'], ['cAvifSpeed', 'cAvifSpeed'],
     ['cTargetKB', 'cTargetKB'], ['gridRows', 'gridRows'], ['gridCols', 'gridCols'],
+    ['wmEnable', 'wm', 'check'], ['wmText', 'wmText'], ['wmSize', 'wmSize'],
+    ['wmOpacity', 'wmOpacity'], ['wmPos', 'wmPos'], ['wmColor', 'wmColor'],
   ];
   function saveSettings() {
     try {
@@ -1824,7 +1920,7 @@
         const el = kind === 'radio'
           ? document.querySelector('input[name="' + name + '"]:checked')
           : document.getElementById(name);
-        if (el) s[key] = el.value;
+        if (el) s[key] = kind === 'check' ? el.checked : el.value;
       }
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
     } catch (_) {}
@@ -1838,6 +1934,9 @@
         if (kind === 'radio') {
           const el = document.querySelector('input[name="' + name + '"][value="' + s[key] + '"]');
           if (el) el.checked = true;
+        } else if (kind === 'check') {
+          const el = document.getElementById(name);
+          if (el) el.checked = !!s[key];
         } else {
           const el = document.getElementById(name);
           if (el) el.value = s[key];
@@ -1862,6 +1961,8 @@
   document.querySelectorAll('input[name="cFmt"]').forEach(r => r.addEventListener('change', () => syncCompressFmtUI(true)));
   $('#quality').addEventListener('input', () => { $('#qualityVal').textContent = $('#quality').value; });
   $('#cQuality').addEventListener('input', () => { $('#cQualityVal').textContent = $('#cQuality').value; });
+  $('#wmEnable').addEventListener('change', () => { $('#wmOpts').hidden = !$('#wmEnable').checked; });
+  $('#wmOpacity').addEventListener('input', () => { $('#wmOpacityVal').textContent = $('#wmOpacity').value + '%'; });
   let saveTimer = null;
   const queueSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 300); };
   document.addEventListener('change', queueSave, true);
@@ -1891,10 +1992,30 @@
     if (e.key === 'Escape' && !lightbox.hidden) { lightbox.hidden = true; lightboxImg.removeAttribute('src'); }
   });
 
+  // —— 压缩前后对比：拖动滑块查看两侧画质 ——
+  const compareBox = $('#compareBox');
+  function openCompare(origUrl, compUrl) {
+    $('#cmpOrig').src = origUrl;
+    $('#cmpComp').src = compUrl;
+    $('#cmpOverlay').style.width = '50%';
+    $('#cmpDivider').style.left = '50%';
+    $('#cmpSlider').value = 50;
+    compareBox.hidden = false;
+  }
+  $('#cmpSlider').addEventListener('input', (e) => {
+    const pct = e.target.value;
+    $('#cmpOverlay').style.width = pct + '%';
+    $('#cmpDivider').style.left = pct + '%';
+  });
+  $('#cmpClose').addEventListener('click', () => { compareBox.hidden = true; });
+  compareBox.addEventListener('click', (e) => { if (e.target === compareBox) compareBox.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !compareBox.hidden) compareBox.hidden = true; });
+
   // 启动时恢复上次的选项，再同步格式相关的 UI 显隐
   loadSettings();
   syncMergeFmtUI(false);
   syncCompressFmtUI(false);
+  $('#wmOpts').hidden = !$('#wmEnable').checked;
   renderToc();
 })();
 </script>
