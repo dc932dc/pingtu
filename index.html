@@ -237,10 +237,10 @@
   .jump button:hover { background: #0a0a0a; border-color: #fff; color: #fff; }
   .jump button:active { filter: brightness(1.2); }
 
-  /* 左侧目录：宽屏时列出当前工具的各个区块，点击跳转 */
+  /* 左侧目录：宽屏时列出当前工具的各个区块，点击跳转；紧贴主卡片左缘、屏幕垂直居中 */
   .toc {
     position: fixed; top: 50%; transform: translateY(-50%);
-    left: max(10px, calc(50vw - 520px));
+    left: max(10px, calc(50vw - 468px));
     width: 116px; z-index: 55;
     display: flex; flex-direction: column; gap: 4px;
   }
@@ -255,7 +255,7 @@
   .toc button.active {
     color: #fff; background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .25);
   }
-  @media (max-width: 1080px) { .toc { display: none; } }
+  @media (max-width: 960px) { .toc { display: none; } }
 
   /* 新增控件：滑块 / 数字输入 / 下拉 / 取色器 */
   .range-input { width: 150px; accent-color: var(--accent-deep); cursor: pointer; }
