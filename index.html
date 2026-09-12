@@ -213,6 +213,17 @@
     box-shadow: 0 0 60px rgba(90, 120, 240, .18) inset;
   }
 
+  /* 灯箱：点击结果图 / 切块放大查看 */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(4, 6, 10, .93);
+    display: flex; align-items: center; justify-content: center;
+    cursor: zoom-out;
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox img { max-width: 96vw; max-height: 96vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+  #resultImg, .tile img { cursor: zoom-in; }
+
   /* 一键回顶 / 到底 */
   .jump {
     position: fixed; top: 50%; transform: translateY(-50%);
@@ -231,6 +242,26 @@
   .jump button:hover { background: linear-gradient(135deg, #6688f0, #4a63d8); border-color: transparent; color: #fff; }
   .jump button:active { filter: brightness(1.2); }
 
+  /* 左侧目录：宽屏时列出当前工具的各个区块，点击跳转 */
+  .toc {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    left: max(12px, calc(50vw - 548px));
+    width: 168px; z-index: 55;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .toc button {
+    border: 1px solid transparent; border-radius: 10px;
+    background: transparent; color: var(--faint);
+    font-size: 13px; text-align: left; padding: 7px 14px;
+    cursor: pointer; font-family: inherit; letter-spacing: .03em;
+    transition: color .15s, background .15s, border-color .15s;
+  }
+  .toc button:hover { color: var(--text); background: rgba(255, 255, 255, .05); }
+  .toc button.active {
+    color: var(--text); background: var(--accent-soft); border-color: var(--border-strong);
+  }
+  @media (max-width: 1080px) { .toc { display: none; } }
+
   /* 新增控件：滑块 / 数字输入 / 下拉 / 取色器 */
   .range-input { width: 150px; accent-color: var(--accent-deep); cursor: pointer; }
   .num-input, .sel {
@@ -243,6 +274,7 @@
     border: 1px solid var(--border); border-radius: 8px; background: rgba(255, 255, 255, .06);
   }
   .file-item.static { cursor: default; }
+  .grid-group { margin-bottom: 20px; }
   .c-row {
     display: flex; align-items: center; gap: 12px;
     background: rgba(255, 255, 255, .03); border: 1px solid transparent;
@@ -322,11 +354,12 @@
 
       <div class="file-list-header" id="listHeader" hidden>
         <span id="listCount"></span>
-        <button class="text-btn" id="sortByNameBtn" type="button" hidden>按文件名重新排序</button>
+        <button class="text-btn" id="sortByNameBtn" type="button" hidden>按文件名排序</button>
+        <button class="text-btn" id="sortByTimeBtn" type="button" hidden>按修改时间排序</button>
       </div>
       <div class="file-list" id="fileList"></div>
 
-      <div class="actions">
+      <div class="actions" id="sec-actions">
         <button class="btn btn-primary" id="mergeBtn">合并</button>
         <button class="btn btn-ghost" id="resetBtn">重置</button>
       </div>
@@ -345,8 +378,8 @@
     <section id="tool-grid" hidden>
       <div class="row" id="sec-grid-files">
         <span class="label">文件</span>
-        <div class="drop" id="gridDrop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴一张图片">+ 选择 / 拖拽 / 粘贴 一张图片</div>
-        <input type="file" id="gridFileInput" accept="image/*" hidden>
+        <div class="drop" id="gridDrop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片，可多选批量切割">+ 选择 / 拖拽 / 粘贴 图片（可多选）</div>
+        <input type="file" id="gridFileInput" accept="image/*" multiple hidden>
       </div>
 
       <div class="row" id="sec-grid-n">
@@ -355,6 +388,8 @@
           <label><input type="radio" name="gridN" value="3" checked>3 × 3（九宫格）</label>
           <label><input type="radio" name="gridN" value="2">2 × 2</label>
           <label><input type="radio" name="gridN" value="4">4 × 4</label>
+          <label><input type="radio" name="gridN" value="custom">自定义</label>
+          <label id="gridCustomWrap" hidden>行 <input id="gridRows" class="num-input" type="number" min="1" max="10" value="2"> × 列 <input id="gridCols" class="num-input" type="number" min="1" max="10" value="3"></label>
         </div>
       </div>
 
@@ -366,9 +401,9 @@
           <label><input type="radio" name="gridFmt" value="webp">webP（体积更小）</label>
         </div>
       </div>
-      <p class="hint">提示：自动居中裁切为正方形后等分切割；发朋友圈按 1×1 → 3×3 的顺序上传即可拼出完整九宫格。</p>
+      <p class="hint">提示：居中裁切后等分切割，支持自定义行列与一次拖入多张批量切割；发朋友圈按 1×1 → 3×3 的顺序上传即可拼出完整九宫格。</p>
 
-      <div class="actions">
+      <div class="actions" id="grid-actions">
         <button class="btn btn-primary" id="cutBtn" disabled>切割</button>
         <button class="btn btn-ghost" id="gridResetBtn">重置</button>
       </div>
@@ -378,7 +413,7 @@
       <section class="result" id="gridResult" hidden>
         <h2>切割结果</h2>
         <p class="info" id="gridInfo"></p>
-        <div class="tiles" id="tiles"></div>
+        <div id="gridGroups"></div>
         <div class="actions" style="margin-top:16px">
           <button class="btn btn-blue" id="dlAllBtn" type="button">打包下载 ZIP</button>
         </div>
@@ -409,14 +444,15 @@
         <span class="label">压缩质量</span>
         <div class="opts">
           <label>质量 <input type="range" id="cQuality" class="range-input" min="30" max="100" value="75"> <span class="desc" id="cQualityVal">75</span></label>
+          <label>目标体积(KB，0=不启用) <input type="number" id="cTargetKB" class="num-input" min="0" value="0"></label>
         </div>
       </div>
-      <p class="hint">提示：保持原始分辨率，仅重新编码压缩；所有处理在浏览器本地完成，不上传。可整个文件夹拖入批量压缩，多张时支持打包 ZIP。</p>
+      <p class="hint">提示：保持原始分辨率，仅重新编码压缩；所有处理在浏览器本地完成，不上传。可整个文件夹拖入批量压缩，多张时支持打包 ZIP；设置目标体积后会自动寻找满足体积的最高质量。</p>
 
       <div class="file-list-header" id="cListHeader" hidden><span id="cCount"></span></div>
       <div class="file-list" id="compressList"></div>
 
-      <div class="actions">
+      <div class="actions" id="compress-actions">
         <button class="btn btn-primary" id="compressBtn">压缩</button>
         <button class="btn btn-ghost" id="compressResetBtn">重置</button>
       </div>
@@ -438,6 +474,12 @@
 <div class="drop-overlay" id="dropOverlay" hidden>
   <div class="drop-overlay-inner">松开鼠标，添加图片</div>
 </div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <img id="lightboxImg" alt="放大预览">
+</div>
+
+<nav class="toc" id="toc" aria-label="页面目录"></nav>
 
 <div class="jump">
   <button id="jumpTop" type="button" title="回到顶部" aria-label="回到顶部">↑</button>
@@ -481,6 +523,7 @@
     h1Zh.textContent = toolMeta[t].zh;
     h1En.textContent = toolMeta[t].en;
     document.title = toolMeta[t].title;
+    renderToc();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
   document.querySelectorAll('.tool-tab').forEach(b => b.addEventListener('click', () => switchTool(b.dataset.tool)));
@@ -489,11 +532,54 @@
   const toolSetMsg = (t, isErr) => (currentTool === 'grid' ? setGridMsg(t, isErr) : currentTool === 'compress' ? setCMsg(t, isErr) : setMsg(t, isErr));
   const toolAddFiles = (list) => (currentTool === 'grid' ? gridAddFiles(list) : currentTool === 'compress' ? compressAddFiles(list) : addFiles(list));
 
+  // —— 左侧目录：宽屏时显示，列出当前工具的区块，点击跳转、滚动高亮 ——
+  const toc = $('#toc');
+  const tocMap = {
+    merge: [
+      ['拼接模式', 'sec-mode'], ['压缩算法', 'sec-format'], ['质量/尺寸', 'sec-quality'],
+      ['拼接样式', 'sec-style'], ['文件', 'sec-files'], ['合并', 'sec-actions'], ['合并结果', 'result'],
+    ],
+    grid: [
+      ['文件', 'sec-grid-files'], ['切割规格', 'sec-grid-n'], ['输出格式', 'sec-grid-fmt'],
+      ['切割', 'grid-actions'], ['切割结果', 'gridResult'],
+    ],
+    compress: [
+      ['文件', 'sec-c-files'], ['输出格式', 'sec-c-fmt'], ['压缩质量', 'sec-c-quality'],
+      ['压缩', 'compress-actions'], ['压缩结果', 'compressResult'],
+    ],
+  };
+  function renderToc() {
+    toc.innerHTML = '';
+    for (const [label, targetId] of (tocMap[currentTool] || [])) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.dataset.target = targetId;
+      b.addEventListener('click', () => {
+        const el = document.getElementById(targetId);
+        if (el && !el.hidden && el.offsetParent) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      toc.append(b);
+    }
+    updateTocActive();
+  }
+  function updateTocActive() {
+    const btns = toc.querySelectorAll('button');
+    let current = null;
+    for (const b of btns) {
+      const el = document.getElementById(b.dataset.target);
+      if (!el || el.hidden || !el.offsetParent) continue;
+      if (el.getBoundingClientRect().top <= 80) current = b;
+    }
+    btns.forEach(b => b.classList.toggle('active', b === current));
+  }
+  window.addEventListener('scroll', updateTocActive, { passive: true });
+
   /* ================= 工具一：拼接图片 ================= */
 
   const items = []; // { uid, file, url }
   let uidSeed = 0;
-  let manualOrder = false; // 手动拖动过顺序后，新添加的图片不再按文件名重排，直接追加到末尾
+  let sortMode = 'name'; // 'name' | 'time' | null（手动拖动后为 null，新添加的图片直接追加到末尾）
   let lastResultUrl = null;
 
   // 文件名自然排序：img2 排在 img10 前面
@@ -511,10 +597,17 @@
     items.sort((a, b) => collator.compare(a.file.name || '', b.file.name || ''));
   }
 
+  function sortByMode() {
+    if (sortMode === 'name') sortByName();
+    else if (sortMode === 'time') items.sort((a, b) => (a.file.lastModified || 0) - (b.file.lastModified || 0));
+  }
+
   function updateListHeader() {
     listHeader.hidden = items.length === 0;
     listCount.textContent = '共 ' + items.length + ' 张，可按住条目上下拖动调整顺序';
-    sortByNameBtn.hidden = !(manualOrder && items.length > 1);
+    const showSorts = items.length > 1;
+    sortByNameBtn.hidden = !showSorts;
+    sortByTimeBtn.hidden = !showSorts;
   }
 
   function addFiles(list) {
@@ -525,9 +618,9 @@
       added++;
     }
     if (added) {
-      if (!manualOrder) sortByName();
+      if (sortMode) sortByMode();
       renderList();
-      setMsg('已添加 ' + added + ' 张图片，共 ' + items.length + ' 张' + (manualOrder ? '（已追加到末尾）' : '（按文件名排序）'));
+      setMsg('已添加 ' + added + ' 张图片，共 ' + items.length + ' 张' + (sortMode ? '（按' + (sortMode === 'time' ? '修改时间' : '文件名') + '排序）' : '（已追加到末尾）'));
     } else {
       setMsg('未识别到图片文件', true);
     }
@@ -563,9 +656,9 @@
       const rank = new Map();
       rows().forEach((r, i) => rank.set(r.dataset.uid, i));
       items.sort((a, b) => (rank.get(String(a.uid)) ?? 0) - (rank.get(String(b.uid)) ?? 0));
-      manualOrder = true;
+      sortMode = null;
       syncListNumbers();
-      setMsg('已手动调整顺序，可点击“按文件名重新排序”恢复');
+      setMsg('已手动调整顺序');
     }
     dragUid = null;
     dragInitialOrder = null;
@@ -641,6 +734,7 @@
 
     const img = document.createElement('img');
     img.className = 'thumb'; img.src = it.url; img.alt = '';
+    img.loading = 'lazy'; img.decoding = 'async';
     img.draggable = false;
 
     const meta = document.createElement('div');
@@ -734,7 +828,7 @@
     const rank = new Map();
     rows().forEach((r, i) => rank.set(r.dataset.uid, i));
     items.sort((a, b) => (rank.get(String(a.uid)) ?? 0) - (rank.get(String(b.uid)) ?? 0));
-    manualOrder = true;
+    sortMode = null;
     syncListNumbers();
     updateListHeader();
   });
@@ -752,10 +846,16 @@
   fileList.addEventListener('drop', (e) => { if (dragUid) e.preventDefault(); });
 
   sortByNameBtn.addEventListener('click', () => {
-    sortByName();
-    manualOrder = false;
+    sortMode = 'name';
+    sortByMode();
     renderList();
     setMsg('已按文件名重新排序');
+  });
+  $('#sortByTimeBtn').addEventListener('click', () => {
+    sortMode = 'time';
+    sortByMode();
+    renderList();
+    setMsg('已按修改时间排序（旧 → 新）');
   });
 
   drop.addEventListener('click', () => fileInput.click());
@@ -1029,7 +1129,7 @@
       const fmt = document.querySelector('input[name="format"]:checked').value; // webp | mozjpeg | avif
       const quality = Math.max(30, Math.min(100, +$('#quality').value || 75));
       const encodeOptions = fmt === 'avif'
-        ? { quality, speed: +$('#avifSpeed').value || 6 }
+        ? { quality, speed: +$('#avifSpeed').value || 10 }
         : { quality };
 
       // 样式：间距 / 边距 / 圆角 / 背景色（作用于所有拼接模式）
@@ -1242,7 +1342,7 @@
   resetBtn.addEventListener('click', () => {
     items.forEach(it => URL.revokeObjectURL(it.url));
     items.length = 0;
-    manualOrder = false;
+    sortMode = 'name';
     renderList();
     if (lastResultUrl) { URL.revokeObjectURL(lastResultUrl); lastResultUrl = null; }
     result.hidden = true;
@@ -1260,27 +1360,28 @@
 
   const gridDrop = $('#gridDrop'), gridFileInput = $('#gridFileInput');
   const cutBtn = $('#cutBtn'), gridResetBtn = $('#gridResetBtn'), gridMsg = $('#gridMsg');
-  const gridResult = $('#gridResult'), gridInfo = $('#gridInfo'), tilesBox = $('#tiles'), dlAllBtn = $('#dlAllBtn');
-  let gridState = null; // { file, url }
-  let gridTiles = [];   // { name, url, blob }
+  const gridResult = $('#gridResult'), gridInfo = $('#gridInfo'), gridGroupsBox = $('#gridGroups'), dlAllBtn = $('#dlAllBtn');
+  let gridQueue = [];   // { uid, file, url, base }
+  let gridGroups = [];  // { base, info, tiles: [{ name, folder, url, blob }] }
   let zipName = 'tiles.zip';
 
   const setGridMsg = (text, isErr = false) => { gridMsg.textContent = text; gridMsg.classList.toggle('err', isErr); };
-  const clearGridTiles = () => {
-    gridTiles.forEach(t => URL.revokeObjectURL(t.url));
-    gridTiles = [];
-    tilesBox.innerHTML = '';
+  const clearGridResults = () => {
+    gridGroups.forEach(g => g.tiles.forEach(t => URL.revokeObjectURL(t.url)));
+    gridGroups = [];
+    gridGroupsBox.innerHTML = '';
   };
+  const allGridTiles = () => gridGroups.flatMap(g => g.tiles);
 
   function gridAddFiles(list) {
-    const f = Array.from(list || []).find(isImageFile);
-    if (!f) return setGridMsg('未识别到图片文件', true);
-    if (gridState) URL.revokeObjectURL(gridState.url);
-    clearGridTiles();
-    gridResult.hidden = true;
-    gridState = { file: f, url: URL.createObjectURL(f) };
+    const files = Array.from(list || []).filter(isImageFile);
+    if (!files.length) return setGridMsg('未识别到图片文件', true);
+    for (const f of files) {
+      const base = ((f.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
+      gridQueue.push({ uid: ++uidSeed, file: f, url: URL.createObjectURL(f), base });
+    }
     cutBtn.disabled = false;
-    setGridMsg('已选择「' + (f.name || '(粘贴的图片)') + '」，点击“切割”');
+    setGridMsg('已添加 ' + files.length + ' 张，共 ' + gridQueue.length + ' 张，点击“切割”');
   }
 
   gridDrop.addEventListener('click', () => gridFileInput.click());
@@ -1289,79 +1390,106 @@
   });
   gridFileInput.addEventListener('change', () => { gridAddFiles(gridFileInput.files); gridFileInput.value = ''; });
 
+  // 切割单张：居中取最大 C:R 裁切窗口，等分为 R×C 块
+  async function cutOne(item, R, C, fmt, mime, qi, total, onProgress) {
+    const im = await decodeSource(item.file);
+    const W = srcW(im), H = srcH(im);
+    let cropW, cropH;
+    if (W / H > C / R) { cropH = H; cropW = H * C / R; }
+    else { cropW = W; cropH = W * R / C; }
+    const tileW = Math.floor(cropW / C), tileH = Math.floor(cropH / R);
+    if (tileW < 1 || tileH < 1) { if (im.close) im.close(); throw new Error('图片太小，无法切割'); }
+    const gridW = tileW * C, gridH = tileH * R;
+    const sx0 = (W - gridW) / 2, sy0 = (H - gridH) / 2;
+
+    const jobs = [];
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) jobs.push({ r, c, sx: sx0 + c * tileW, sy: sy0 + r * tileH });
+    }
+    let finished = 0;
+    const blobs = await mapLimit(jobs, 4, async (job) => {
+      const cv = document.createElement('canvas');
+      cv.width = tileW; cv.height = tileH;
+      const cx = cv.getContext('2d');
+      if (fmt === 'jpeg') { cx.fillStyle = '#000000'; cx.fillRect(0, 0, tileW, tileH); }
+      cx.drawImage(im, job.sx, job.sy, tileW, tileH, 0, 0, tileW, tileH);
+      // 编码完成后立即释放画布，控制内存峰值
+      let blob;
+      if (fmt === 'webp') blob = (await encodeImage(cv, 'webp', { quality: 80 })).blob;
+      else blob = await canvasToBlob(cv, mime, 0.92);
+      cv.width = cv.height = 0;
+      finished++;
+      onProgress(finished, jobs.length);
+      return blob;
+    });
+    if (im.close) im.close();
+    const folder = (total > 1 ? (qi + 1) + '-' : '') + item.base;
+    const tiles = blobs.map((blob, i) => {
+      const { r, c } = jobs[i];
+      const name = (total > 1 ? (qi + 1) + '-' : '') + item.base + '_' + (r + 1) + 'x' + (c + 1) + '.' + fmt;
+      return { name, folder, blob, url: URL.createObjectURL(blob) };
+    });
+    return {
+      base: item.base,
+      info: item.base + ' · 原图 ' + W + ' × ' + H + ' px → 居中裁切 ' + gridW + ' × ' + gridH + ' px，每块 ' + tileW + ' × ' + tileH + ' px · 共 ' + tiles.length + ' 块',
+      tiles,
+    };
+  }
+
+  function renderGridGroup(group, C) {
+    const wrap = document.createElement('div');
+    wrap.className = 'grid-group';
+    const info = document.createElement('p');
+    info.className = 'info'; info.style.margin = '0 0 12px';
+    info.textContent = group.info;
+    const tiles = document.createElement('div');
+    tiles.className = 'tiles';
+    tiles.style.gridTemplateColumns = 'repeat(' + C + ', 1fr)';
+    group.tiles.forEach(t => {
+      const cell = document.createElement('div');
+      cell.className = 'tile';
+      const img = document.createElement('img');
+      img.src = t.url; img.alt = t.name; img.loading = 'lazy'; img.decoding = 'async';
+      const cap = document.createElement('div');
+      cap.className = 't-name'; cap.textContent = t.name; cap.title = t.name;
+      const a = document.createElement('a');
+      a.className = 'mini-btn'; a.href = t.url; a.download = t.name; a.textContent = '下载';
+      cell.append(img, cap, a);
+      tiles.append(cell);
+    });
+    wrap.append(info, tiles);
+    gridGroupsBox.append(wrap);
+  }
+
   cutBtn.addEventListener('click', async () => {
-    if (!gridState) return;
-    const n = +document.querySelector('input[name="gridN"]:checked').value;
+    if (!gridQueue.length) return;
+    const nSel = document.querySelector('input[name="gridN"]:checked').value;
+    let R, C;
+    if (nSel === 'custom') {
+      R = Math.max(1, Math.min(10, +$('#gridRows').value || 2));
+      C = Math.max(1, Math.min(10, +$('#gridCols').value || 3));
+    } else { R = C = +nSel; }
     const fmt = document.querySelector('input[name="gridFmt"]:checked').value; // png | jpeg | webp
     const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
     cutBtn.disabled = true;
-    setGridMsg('切割中…');
     try {
-      const im = await decodeSource(gridState.file);
-      const side = Math.min(srcW(im), srcH(im));
-      const tile = Math.floor(side / n);
-      if (tile < 1) throw new Error('图片太小，无法切割');
-      const gridPix = tile * n;
-      const sOff = (side - gridPix) / 2;
-      const sx0 = (srcW(im) - side) / 2, sy0 = (srcH(im) - side) / 2;
-
-      clearGridTiles();
-      const base = ((gridState.file.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
-
-      // 先把所有坐标算好，再受控并发编码，避免串行 await 累加耗时
-      const jobs = [];
-      for (let r = 0; r < n; r++) {
-        for (let c = 0; c < n; c++) {
-          jobs.push({ r, c, sx: sx0 + sOff + c * tile, sy: sy0 + sOff + r * tile });
-        }
-      }
-      const limit = 4; // 并发上限，兼顾速度与内存峰值
-      let finished = 0;
-      const blobs = await mapLimit(jobs, limit, async (job) => {
-        const cv = document.createElement('canvas');
-        cv.width = tile; cv.height = tile;
-        const cx = cv.getContext('2d');
-        if (fmt === 'jpeg') { cx.fillStyle = '#000000'; cx.fillRect(0, 0, tile, tile); }
-        cx.drawImage(im, job.sx, job.sy, tile, tile, 0, 0, tile, tile);
-        // 编码完成后立即释放画布，控制内存峰值
-        let blob;
-        if (fmt === 'webp') blob = (await encodeImage(cv, 'webp', { quality: 80 })).blob;
-        else blob = await canvasToBlob(cv, mime, 0.92);
-        cv.width = cv.height = 0;
-        finished++;
-        if (finished % n === 0 || finished === jobs.length) {
-          setGridMsg('切割中… ' + finished + ' / ' + jobs.length);
-        }
-        return blob;
-      });
-
-      blobs.forEach((blob, i) => {
-        const { r, c } = jobs[i];
-        const name = base + '_' + (r + 1) + 'x' + (c + 1) + '.' + fmt;
-        gridTiles.push({ name, url: URL.createObjectURL(blob), blob });
-      });
-      zipName = base + '_' + n + 'x' + n + '.zip';
-
-      tilesBox.style.gridTemplateColumns = 'repeat(' + n + ', 1fr)';
-      gridTiles.forEach(t => {
-        const cell = document.createElement('div');
-        cell.className = 'tile';
-        const img = document.createElement('img');
-        img.src = t.url; img.alt = t.name;
-        const cap = document.createElement('div');
-        cap.className = 't-name'; cap.textContent = t.name; cap.title = t.name;
-        const a = document.createElement('a');
-        a.className = 'mini-btn'; a.href = t.url; a.download = t.name; a.textContent = '下载';
-        cell.append(img, cap, a);
-        tilesBox.append(cell);
-      });
-
-      const gw = srcW(im), gh = srcH(im);
-      if (im.close) im.close();
-      gridInfo.textContent = '原图 ' + gw + ' × ' + gh + ' px → 居中裁切 ' +
-        gridPix + ' × ' + gridPix + ' px，每块 ' + tile + ' × ' + tile + ' px · 共 ' + gridTiles.length + ' 块 · ' + fmt.toUpperCase();
+      clearGridResults();
       gridResult.hidden = false;
-      setGridMsg('切割完成，共 ' + gridTiles.length + ' 块');
+      let totalTiles = 0;
+      for (let qi = 0; qi < gridQueue.length; qi++) {
+        const group = await cutOne(gridQueue[qi], R, C, fmt, mime, qi, gridQueue.length, (done, total) => {
+          setGridMsg('切割中… 第 ' + (qi + 1) + ' / ' + gridQueue.length + ' 张 · ' + done + ' / ' + total + ' 块');
+        });
+        gridGroups.push(group);
+        renderGridGroup(group, C);
+        totalTiles += group.tiles.length;
+      }
+      zipName = gridQueue.length === 1
+        ? gridGroups[0].base + '_' + R + 'x' + C + '.zip'
+        : '九宫格切割_' + R + 'x' + C + '.zip';
+      gridInfo.textContent = '共 ' + gridQueue.length + ' 张 · ' + totalTiles + ' 块 · ' + fmt.toUpperCase() +
+        (gridQueue.length > 1 ? ' · 打包时按图片分文件夹' : '');
+      setGridMsg('切割完成，共 ' + gridQueue.length + ' 张 · ' + totalTiles + ' 块');
       gridResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
       setGridMsg('切割失败：' + err.message, true);
@@ -1438,11 +1566,13 @@
   }
 
   dlAllBtn.addEventListener('click', async () => {
-    if (!gridTiles.length || dlAllBtn.disabled) return;
+    const tiles = allGridTiles();
+    if (!tiles.length || dlAllBtn.disabled) return;
     dlAllBtn.disabled = true;
     try {
       setGridMsg('正在打包 ZIP…');
-      const blob = await makeZip(gridTiles);
+      const multi = gridGroups.length > 1;
+      const blob = await makeZip(tiles.map(t => ({ name: (multi ? t.folder + '/' : '') + t.name, blob: t.blob })));
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = zipName;
@@ -1450,21 +1580,27 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 4000);
-      setGridMsg('已打包 ' + gridTiles.length + ' 块（' + fmtSize(blob.size) + '）为 ZIP，无需浏览器多文件下载许可');
+      setGridMsg('已打包 ' + tiles.length + ' 块（' + fmtSize(blob.size) + '）为 ZIP' + (multi ? '，已按图片分文件夹' : ''));
     } catch (err) {
       setGridMsg('打包失败：' + err.message, true);
     }
     dlAllBtn.disabled = false;
   });
 
+  // 切割规格：自定义行列输入框显隐
+  document.querySelectorAll('input[name="gridN"]').forEach(r => r.addEventListener('change', () => {
+    $('#gridCustomWrap').hidden = document.querySelector('input[name="gridN"]:checked').value !== 'custom';
+  }));
+
   gridResetBtn.addEventListener('click', () => {
-    if (gridState) URL.revokeObjectURL(gridState.url);
-    gridState = null;
-    clearGridTiles();
+    gridQueue.forEach(it => URL.revokeObjectURL(it.url));
+    gridQueue = [];
+    clearGridResults();
     gridResult.hidden = true;
     cutBtn.disabled = true;
     setGridMsg('');
     document.querySelector('input[name="gridN"][value="3"]').checked = true;
+    $('#gridCustomWrap').hidden = true;
     document.querySelector('input[name="gridFmt"][value="png"]').checked = true;
   });
 
@@ -1498,6 +1634,7 @@
       row.className = 'file-item static';
       const img = document.createElement('img');
       img.className = 'thumb'; img.src = it.url; img.alt = '';
+      img.loading = 'lazy'; img.decoding = 'async';
       const meta = document.createElement('div');
       meta.className = 'meta';
       const name = document.createElement('div');
@@ -1533,13 +1670,32 @@
   });
   cFileInput.addEventListener('change', () => { compressAddFiles(cFileInput.files); cFileInput.value = ''; });
 
+  // 目标体积压缩：二分质量，找体积不超过目标的最高质量；达不到就用最低质量 30
+  async function encodeToTarget(cv, fmt, targetBytes, options) {
+    const enc = (q) => encodeImage(cv, fmt, { ...options, quality: q });
+    const probe = await enc(options.quality);
+    if (probe.blob.size <= targetBytes) return { blob: probe.blob, quality: options.quality, engine: probe.engine };
+    let lo = 30, hi = Math.min(100, options.quality - 1);
+    let result = null, qUsed = 30;
+    while (lo <= hi) {
+      const mid = Math.round((lo + hi) / 2);
+      const r = await enc(mid);
+      if (r.blob.size <= targetBytes) { result = r; qUsed = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    if (result) return { blob: result.blob, quality: qUsed, engine: result.engine };
+    const floorR = await enc(30);
+    return { blob: floorR.blob, quality: 30, engine: floorR.engine, note: '目标过小，已用最低质量' };
+  }
+
   compressBtn.addEventListener('click', async () => {
     if (!cItems.length) return setCMsg('请先添加图片', true);
     compressBtn.disabled = true;
     try {
       const fmt = document.querySelector('input[name="cFmt"]:checked').value;
       const quality = Math.max(30, Math.min(100, +$('#cQuality').value || 75));
-      const options = fmt === 'avif' ? { quality, speed: +$('#cAvifSpeed').value || 6 } : { quality };
+      const targetBytes = Math.max(0, +$('#cTargetKB').value || 0) * 1024;
+      const options = fmt === 'avif' ? { quality, speed: +$('#cAvifSpeed').value || 10 } : { quality };
       cResultsArr.forEach(r => URL.revokeObjectURL(r.url));
       cResultsArr = [];
       cResult.hidden = true;
@@ -1561,11 +1717,18 @@
         if (!cx) throw new Error('无法创建画布');
         cx.drawImage(src, 0, 0, bw, bh);
         if (src.close) src.close();
-        const { blob, engine } = await encodeImage(cv, fmt, options);
+        let blob, engine, qualityUsed = quality, targetNote = '';
+        if (targetBytes > 0) {
+          const r = await encodeToTarget(cv, fmt, targetBytes, options);
+          blob = r.blob; engine = r.engine; qualityUsed = r.quality; targetNote = r.note || '';
+        } else {
+          const r = await encodeImage(cv, fmt, options);
+          blob = r.blob; engine = r.engine;
+        }
         done++;
         setCMsg('压缩中… ' + done + ' / ' + cItems.length);
         const base = ((it.file.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
-        return { name: base + '.' + EXT[fmt], blob, origSize: it.file.size, engine };
+        return { name: base + '.' + EXT[fmt], blob, origSize: it.file.size, engine, qualityUsed, targetNote };
       });
 
       outs.forEach((o) => {
@@ -1575,11 +1738,13 @@
         row.className = 'c-row';
         const nm = document.createElement('span');
         nm.className = 'c-name'; nm.textContent = o.name;
+        if (o.targetNote) nm.title = o.targetNote;
         const delta = document.createElement('span');
         delta.className = 'c-delta';
         const savedPct = o.origSize > 0 ? Math.round((1 - o.blob.size / o.origSize) * 100) : 0;
         delta.textContent = fmtSize(o.origSize) + ' → ' + fmtSize(o.blob.size) +
-          (savedPct >= 0 ? '（省 ' + savedPct + '%）' : '（大 ' + (-savedPct) + '%）');
+          (savedPct >= 0 ? '（省 ' + savedPct + '%）' : '（大 ' + (-savedPct) + '%）') +
+          (targetBytes > 0 ? ' · 质量 ' + o.qualityUsed : '');
         const dl = document.createElement('a');
         dl.href = url; dl.download = o.name; dl.textContent = '下载';
         row.append(nm, delta, dl);
@@ -1589,9 +1754,13 @@
       const origTotal = cResultsArr.reduce((s, r) => s + r.origSize, 0);
       const newTotal = cResultsArr.reduce((s, r) => s + r.blob.size, 0);
       const anyMain = outs.some(o => o.engine !== 'worker');
+      const allMet = targetBytes > 0 && outs.every(o => !o.targetNote);
       cInfo.textContent = cResultsArr.length + ' 张 · 合计 ' + fmtSize(origTotal) + ' → ' + fmtSize(newTotal) +
         (origTotal > 0 ? '（省 ' + Math.max(0, Math.round((1 - newTotal / origTotal) * 100)) + '%）' : '') +
-        ' · 质量 ' + quality + ' · ' + (anyMain ? '部分经主线程编码' : 'Squoosh WASM（Worker 后台编码）');
+        ' · ' + (targetBytes > 0
+          ? '目标 ' + fmtSize(targetBytes) + (allMet ? '，全部达标' : '，部分未达标')
+          : '质量 ' + quality) +
+        ' · ' + (anyMain ? '部分经主线程编码' : 'Squoosh WASM（Worker 后台编码）');
       cZipBtn.hidden = cResultsArr.length < 2;
       cResult.hidden = false;
       setCMsg('压缩完成，共 ' + cResultsArr.length + ' 张');
@@ -1646,6 +1815,7 @@
     ['gapPx', 'gap'], ['marginPx', 'margin'], ['radiusPx', 'radius'], ['bgColor', 'bg'], ['avifSpeed', 'avifSpeed'],
     ['gridN', 'gridN', 'radio'], ['gridFmt', 'gridFmt', 'radio'],
     ['cFmt', 'cFmt', 'radio'], ['cQuality', 'cQuality'], ['cAvifSpeed', 'cAvifSpeed'],
+    ['cTargetKB', 'cTargetKB'], ['gridRows', 'gridRows'], ['gridCols', 'gridCols'],
   ];
   function saveSettings() {
     try {
@@ -1710,10 +1880,22 @@
   window.addEventListener('resize', updateJumpBtns);
   updateJumpBtns();
 
+  // —— 灯箱：点击合并结果图 / 切块放大查看，点击任意处或 Esc 关闭 ——
+  const lightbox = $('#lightbox'), lightboxImg = $('#lightboxImg');
+  document.addEventListener('click', (e) => {
+    if (!lightbox.hidden) { lightbox.hidden = true; lightboxImg.removeAttribute('src'); return; }
+    const img = e.target.closest ? e.target.closest('#resultImg, .tile img') : null;
+    if (img && img.src) { lightboxImg.src = img.src; lightbox.hidden = false; }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !lightbox.hidden) { lightbox.hidden = true; lightboxImg.removeAttribute('src'); }
+  });
+
   // 启动时恢复上次的选项，再同步格式相关的 UI 显隐
   loadSettings();
   syncMergeFmtUI(false);
   syncCompressFmtUI(false);
+  renderToc();
 })();
 </script>
 </body>
