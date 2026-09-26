@@ -1,0 +1,2117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">  <!-- 空图标：避免浏览器每次都去请求 /favicon.ico 报 404 -->
+<title>拼接图片 · Combine Images</title>
+<style>
+  :root {
+    color-scheme: dark; /* 原生控件（下拉弹层/取色器/数字框）统一走暗色 */
+    --bg: #0a0a0a;
+    --border: rgba(255, 255, 255, .14);
+    --border-strong: rgba(255, 255, 255, .32);
+    --text: #ededed;
+    --dim: #a1a1a1;
+    --faint: #6f6f6f;
+    --accent: #ffffff;
+    --accent-deep: #d4d4d4;
+    --accent-soft: rgba(255, 255, 255, .1);
+    --err: #f0937f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  html, body { min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  #starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  ::selection { background: rgba(255, 255, 255, .22); }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  :focus-visible { outline: 2px solid rgba(122, 162, 247, .55); outline-offset: 2px; }
+
+  .wrap { position: relative; z-index: 1; max-width: 720px; margin: 0 auto; padding: 46px 24px 64px; }
+  [id] { scroll-margin-top: 28px; }
+
+  h1 { font-size: 27px; font-weight: 800; letter-spacing: .01em; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  h1 .zh { color: #fff; }
+  h1 .en { font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); }
+  .slogan { font-size: 13px; margin: 12px 0 22px; color: var(--dim); display: flex; align-items: center; gap: 10px; }
+  .slogan::before { content: ''; flex: none; width: 18px; height: 2px; border-radius: 1px; background: linear-gradient(90deg, #fff, transparent); }
+
+  /* 工具切换 */
+  .tool-nav { display: flex; gap: 10px; margin: 0 0 26px; }
+  .tool-tab {
+    padding: 9px 22px; border-radius: 999px; border: 1px solid var(--border);
+    background: transparent; color: var(--dim);
+    font-size: 14px; cursor: pointer; font-family: inherit; letter-spacing: .02em;
+    transition: color .15s, border-color .15s, background .15s, box-shadow .15s;
+  }
+  .tool-tab:hover { color: #fff; border-color: var(--border-strong); }
+  .tool-tab.active {
+    background: #fff; color: #000; border-color: #fff; font-weight: 600; box-shadow: none;
+  }
+
+  /* 毛玻璃主卡片 */
+  .glass {
+    position: relative; padding: 30px 30px 34px; border-radius: 18px;
+    border: 1px solid var(--border);
+    background: #0f0f0f;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .05), 0 24px 60px rgba(0, 0, 0, .6);
+  }
+
+  .row { display: flex; align-items: flex-start; margin-bottom: 22px; }
+  .label { flex: none; width: 78px; padding-top: 2px; font-size: 14px; color: var(--dim); letter-spacing: .04em; }
+  .opts { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 24px; padding-top: 1px; }
+  .opts-col { flex-direction: column; align-items: flex-start; gap: 11px; }
+  .opts label { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; cursor: pointer; transition: color .15s; }
+  .opts label:hover { color: #c6d6f5; }
+  .opts label .desc { font-size: 12px; color: var(--faint); }
+  input[type="radio"] { width: 14px; height: 14px; accent-color: var(--accent-deep); cursor: pointer; flex: none; }
+  select.sel option, option { background: #0d1117; color: #e7ecf5; }
+
+  .drop {
+    display: inline-block; color: #000; font-size: 15px; font-weight: 600; letter-spacing: .02em;
+    padding: 14px 28px; border-radius: 12px; cursor: pointer; user-select: none;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
+    transition: filter .15s ease, transform .15s ease;
+  }
+  .drop:hover { background: #e6e6e6; }
+  .drop:active { transform: translateY(1px); }
+  .hint { font-size: 12px; color: var(--faint); margin: 12px 0 0 78px; line-height: 1.8; }
+
+  .file-list-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin: 18px 0 10px 78px; font-size: 12px; color: var(--faint);
+  }
+  .file-list-header[hidden] { display: none; }
+  .text-btn {
+    border: none; background: none; padding: 2px;
+    color: var(--accent); font-size: 12px; cursor: pointer; font-family: inherit;
+  }
+  .text-btn:hover { text-decoration: underline; }
+
+  .file-list { margin: 0 0 0 78px; }
+  .file-item {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255, 255, 255, .03); border: 1px solid transparent;
+    border-radius: 12px; padding: 8px 12px; margin-bottom: 8px;
+    transition: border-color .15s, background .15s;
+    cursor: grab;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .file-item:active { cursor: grabbing; }
+  .file-item:hover { border-color: var(--border); background: rgba(255, 255, 255, .055); }
+  .file-item.dragging {
+    opacity: .45; border-style: dashed; border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .file-item .thumb { width: 44px; height: 44px; flex: none; object-fit: cover; border-radius: 7px; background: #fff; }
+  .file-item .meta { flex: 1; min-width: 0; line-height: 1.35; }
+  .file-item .name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .file-item .sub { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .file-item .ops { display: flex; gap: 6px; }
+  .icon-btn {
+    width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 8px;
+    background: rgba(255, 255, 255, .05); color: var(--text); font-size: 13px; line-height: 1; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .icon-btn:hover { background: var(--accent-soft); border-color: var(--border-strong); }
+  .icon-btn:disabled { opacity: .3; cursor: default; }
+
+  .actions { display: flex; gap: 14px; margin-top: 28px; }
+  .btn {
+    border: 1px solid transparent; border-radius: 12px; padding: 13px 34px; font-size: 15px; cursor: pointer;
+    font-family: inherit; letter-spacing: .02em; transition: filter .15s, background .15s, border-color .15s;
+  }
+  .btn-primary {
+    background: #fff; color: #000; font-weight: 600;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
+  }
+  .btn-primary:hover { background: #e6e6e6; }
+  .btn-ghost { background: rgba(255, 255, 255, .04); color: var(--text); border-color: var(--border); }
+  .btn-ghost:hover { background: rgba(255, 255, 255, .07); border-color: var(--border-strong); }
+  .btn:disabled { opacity: .55; cursor: default; filter: none; }
+  .btn-blue {
+    background: #fff; color: #000; font-weight: 600; text-decoration: none;
+    display: inline-block; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
+  }
+  .btn-blue:hover { background: #e6e6e6; }
+
+  .msg { min-height: 22px; margin-top: 16px; font-size: 13px; color: #8ab4f8; font-variant-numeric: tabular-nums; }
+  .msg.err { color: var(--err); }
+
+  .result {
+    margin-top: 18px; padding: 22px;
+    border: 1px solid var(--border); border-radius: 16px;
+    background: #0f0f0f;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  }
+  .result h2 { font-size: 15px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 10px; letter-spacing: .04em; }
+  .result h2::before { content: ''; width: 3px; height: 15px; border-radius: 2px; background: var(--accent); }
+  .result .preview {
+    max-width: 100%; border-radius: 10px; border: 1px solid var(--border);
+    background: repeating-conic-gradient(#161c26 0% 25%, #1e2634 0% 50%); background-size: 24px 24px;
+  }
+  .result .info { font-size: 12px; color: var(--faint); margin: 12px 0 16px; font-variant-numeric: tabular-nums; line-height: 1.8; }
+
+  /* 九宫格切图结果：黑底、无缝隙 */
+  .tiles { display: grid; gap: 0; }
+  .tile {
+    position: relative; border: none; border-radius: 0;
+    background: #000; padding: 0; text-align: center;
+  }
+  .tile img { width: 100%; display: block; border-radius: 0; background: #000; }
+  .tile .t-name {
+    position: absolute; left: 4px; right: 4px; bottom: 34px; margin: 0;
+    font-size: 11px; color: rgba(255, 255, 255, .78); background: rgba(0, 0, 0, .45);
+    font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    pointer-events: none;
+  }
+  .tile .mini-btn {
+    position: absolute; left: 4px; right: 4px; bottom: 4px; display: block;
+    font-size: 12px; padding: 6px 0; border-radius: 8px;
+    background: rgba(0, 0, 0, .55); color: var(--accent); text-decoration: none; transition: background .15s, color .15s;
+  }
+  .tile .mini-btn:hover { background: rgba(255, 255, 255, .25); color: #fff; }
+
+  .drop-overlay {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(6, 9, 15, .82); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .drop-overlay[hidden] { display: none; }
+  .drop-overlay-inner {
+    border: 1.5px dashed rgba(122, 162, 247, .75); border-radius: 18px;
+    padding: 42px 68px; font-size: 20px; font-weight: 700; color: #fff; letter-spacing: .06em;
+    background: rgba(90, 120, 240, .12);
+    box-shadow: 0 0 60px rgba(90, 120, 240, .18) inset;
+  }
+
+  /* 灯箱：点击结果图 / 切块放大查看 */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(4, 6, 10, .93);
+    display: flex; align-items: center; justify-content: center;
+    cursor: zoom-out;
+  }
+  .lightbox[hidden] { display: none; }
+  .lightbox img { max-width: 96vw; max-height: 96vh; border-radius: 8px; box-shadow: 0 20px 60px rgba(0, 0, 0, .5); }
+  #resultImg, .tile img { cursor: zoom-in; }
+
+  /* 压缩前后对比 */
+  .cmp-wrap { position: relative; max-width: 92vw; max-height: 86vh; user-select: none; -webkit-user-select: none; }
+  .cmp-img { display: block; max-width: 92vw; max-height: 86vh; width: auto; height: auto; }
+  .cmp-overlay { position: absolute; top: 0; left: 0; height: 100%; width: 50%; overflow: hidden; }
+  .cmp-overlay .cmp-img { position: absolute; top: 0; left: 0; height: 100%; width: auto; max-width: none; }
+  .cmp-divider { position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; background: rgba(255, 255, 255, .85); pointer-events: none; }
+  .cmp-tag { position: absolute; top: 10px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: rgba(0, 0, 0, .55); color: #fff; pointer-events: none; }
+  .cmp-tag-l { left: 10px; }
+  .cmp-tag-r { right: 10px; }
+  #cmpSlider { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); width: 70%; accent-color: var(--accent-deep); cursor: ew-resize; }
+  .cmp-close {
+    position: absolute; top: -14px; right: -14px; width: 34px; height: 34px;
+    border-radius: 50%; border: 1px solid var(--border); background: #141a24;
+    color: var(--text); font-size: 16px; line-height: 1; cursor: pointer;
+  }
+
+  /* 一键回顶 / 到底 */
+  .jump {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    right: max(16px, calc(50vw - 412px));
+    z-index: 55; display: flex; flex-direction: column; gap: 8px;
+  }
+  .jump button {
+    width: 38px; height: 38px; border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(10, 10, 10, .8); color: var(--dim);
+    font-size: 16px; line-height: 1; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .jump button:hover { background: #0a0a0a; border-color: #fff; color: #fff; }
+  .jump button:active { filter: brightness(1.2); }
+
+  /* 左侧目录：宽屏时列出当前工具的各个区块，点击跳转；紧贴主卡片左缘、屏幕垂直居中 */
+  .toc {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    left: max(10px, calc(50vw - 468px));
+    width: 116px; z-index: 55;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .toc button {
+    border: 1px solid transparent; border-radius: 8px;
+    background: transparent; color: var(--faint);
+    font-size: 12px; text-align: left; padding: 6px 10px;
+    cursor: pointer; font-family: inherit; letter-spacing: .02em;
+    transition: color .15s, background .15s, border-color .15s;
+  }
+  .toc button:hover { color: #fff; background: rgba(255, 255, 255, .06); }
+  .toc button.active {
+    color: #fff; background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .25);
+  }
+  @media (max-width: 960px) { .toc { display: none; } }
+
+  /* 新增控件：滑块 / 数字输入 / 下拉 / 取色器 */
+  .range-input { width: 150px; accent-color: var(--accent-deep); cursor: pointer; }
+  .num-input, .sel {
+    width: 84px; background: rgba(255, 255, 255, .06); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 6px 8px; font: inherit; font-size: 13px;
+  }
+  .sel { width: auto; }
+  input[type="color"] {
+    width: 40px; height: 30px; padding: 2px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 8px; background: rgba(255, 255, 255, .06);
+  }
+  .file-item.static { cursor: default; }
+  .grid-group { margin-bottom: 20px; }
+  .c-row {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255, 255, 255, .03); border: 1px solid transparent;
+    border-radius: 10px; padding: 8px 12px; margin-bottom: 8px; font-size: 13px;
+  }
+  .c-row .c-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c-row .c-delta { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .c-row a { color: var(--accent); text-decoration: none; }
+  .c-row a:hover { text-decoration: underline; }
+  @media (max-width: 560px) {
+    .row { flex-wrap: wrap; }
+    .label { width: 100%; margin-bottom: 10px; }
+    .file-list, .hint, .file-list-header { margin-left: 0; }
+    .glass { padding: 22px 18px 26px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="starfield" aria-hidden="true"></canvas>
+<main class="wrap">
+  <h1><span class="zh" id="h1Zh">拼接图片</span> <span class="en" id="h1En">Combine Images</span></h1>
+  <p class="slogan">不上传、不留存、不扫描、不识别，100%安全</p>
+
+  <nav class="tool-nav" aria-label="工具切换">
+    <button class="tool-tab active" data-tool="merge" type="button">拼接图片</button>
+    <button class="tool-tab" data-tool="grid" type="button">九宫格切割</button>
+    <button class="tool-tab" data-tool="compress" type="button">图片压缩</button>
+  </nav>
+
+  <div class="glass">
+    <!-- ============ 工具一：拼接图片 ============ -->
+    <section id="tool-merge">
+      <div class="row" id="sec-mode">
+        <span class="label">拼接模式</span>
+        <div class="opts">
+          <label><input type="radio" name="mode" value="vertical" checked>纵向(垂直)</label>
+          <label><input type="radio" name="mode" value="horizontal">横向(水平)</label>
+          <label><input type="radio" name="mode" value="grid3">九宫格拼图</label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-format">
+        <span class="label">压缩算法</span>
+        <div class="opts opts-col">
+          <label><input type="radio" name="format" value="webp">webP <span class="desc">压缩后图片格式为 webp，压缩率较高，大多数浏览器支持</span></label>
+          <label><input type="radio" name="format" value="mozjpeg" checked>mozJPEG <span class="desc">压缩后图片格式为 jpg，兼容性最好，所有浏览器支持</span></label>
+          <label><input type="radio" name="format" value="avif">avif <span class="desc">压缩后图片格式为 avif，压缩率较高，部分现代浏览器支持</span></label>
+          <label id="avifSpeedWrap" hidden>编码速度
+            <select id="avifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10" selected>最快</option></select>
+          </label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-quality">
+        <span class="label">质量/尺寸</span>
+        <div class="opts">
+          <label>质量 <input type="range" id="quality" class="range-input" min="30" max="100" value="75"> <span class="desc" id="qualityVal">75</span></label>
+          <label>最长边(px，0=不限) <input type="number" id="maxEdge" class="num-input" min="0" value="0"></label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-style">
+        <span class="label">拼接样式</span>
+        <div class="opts">
+          <label>间距(px) <input type="number" id="gapPx" class="num-input" min="0" value="0"></label>
+          <label>边距(px) <input type="number" id="marginPx" class="num-input" min="0" value="0"></label>
+          <label>圆角(px) <input type="number" id="radiusPx" class="num-input" min="0" value="0"></label>
+          <label>背景 <input type="color" id="bgColor" value="#000000"></label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-watermark">
+        <span class="label">水印</span>
+        <div class="opts opts-col">
+          <label><input type="checkbox" id="wmEnable">启用文字水印</label>
+          <div class="opts" id="wmOpts" hidden>
+            <label>内容 <input type="text" id="wmText" class="num-input" style="width:150px" placeholder="如：@我的名字" maxlength="30"></label>
+            <label>字号 <input type="number" id="wmSize" class="num-input" min="8" max="200" value="24"></label>
+            <label>不透明度 <input type="range" id="wmOpacity" class="range-input" min="10" max="100" value="40"> <span class="desc" id="wmOpacityVal">40%</span></label>
+            <label>位置
+              <select id="wmPos" class="sel">
+                <option value="br" selected>右下</option><option value="bl">左下</option>
+                <option value="tr">右上</option><option value="tl">左上</option>
+                <option value="c">居中</option><option value="tile">平铺</option>
+              </select>
+            </label>
+            <label>颜色 <input type="color" id="wmColor" value="#ffffff"></label>
+          </div>
+        </div>
+      </div>
+
+      <div class="row" id="sec-files">
+        <span class="label">文件</span>
+        <div class="drop" id="drop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片文件">+ 选择 / 拖拽 / 粘贴 文件至此</div>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      </div>
+      <p class="hint">提示：可从文件管理器把图片或整个文件夹直接拖到页面任意位置添加（文件夹会递归读取其中的图片），将按文件名自动排序；也可以在列表中按住条目上下拖动，手动调整顺序。</p>
+
+      <div class="file-list-header" id="listHeader" hidden>
+        <span id="listCount"></span>
+        <button class="text-btn" id="sortByNameBtn" type="button" hidden>按文件名排序</button>
+        <button class="text-btn" id="sortByTimeBtn" type="button" hidden>按修改时间排序</button>
+      </div>
+      <div class="file-list" id="fileList"></div>
+
+      <div class="actions" id="sec-actions">
+        <button class="btn btn-primary" id="mergeBtn">合并</button>
+        <button class="btn btn-ghost" id="resetBtn">重置</button>
+      </div>
+
+      <p class="msg" id="msg" role="status" aria-live="polite"></p>
+
+      <section class="result" id="result" hidden>
+        <h2>合并结果</h2>
+        <img class="preview" id="resultImg" alt="合并结果预览">
+        <p class="info" id="resultInfo"></p>
+        <a class="btn btn-blue" id="downloadBtn" download>下载图片</a>
+        <p class="hint" style="margin-top:12px">输出已自动清除 EXIF 信息（含 GPS 定位、设备信息等隐私），可放心分享。</p>
+      </section>
+    </section>
+
+    <!-- ============ 工具二：九宫格切割 ============ -->
+    <section id="tool-grid" hidden>
+      <div class="row" id="sec-grid-files">
+        <span class="label">文件</span>
+        <div class="drop" id="gridDrop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片，可多选批量切割">+ 选择 / 拖拽 / 粘贴 图片（可多选）</div>
+        <input type="file" id="gridFileInput" accept="image/*" multiple hidden>
+      </div>
+
+      <div class="row" id="sec-grid-n">
+        <span class="label">切割规格</span>
+        <div class="opts">
+          <label><input type="radio" name="gridN" value="3" checked>3 × 3（九宫格）</label>
+          <label><input type="radio" name="gridN" value="2">2 × 2</label>
+          <label><input type="radio" name="gridN" value="4">4 × 4</label>
+          <label><input type="radio" name="gridN" value="custom">自定义</label>
+          <label id="gridCustomWrap" hidden>行 <input id="gridRows" class="num-input" type="number" min="1" max="10" value="2"> × 列 <input id="gridCols" class="num-input" type="number" min="1" max="10" value="3"></label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-grid-fmt">
+        <span class="label">输出格式</span>
+        <div class="opts">
+          <label><input type="radio" name="gridFmt" value="png" checked>PNG（无损）</label>
+          <label><input type="radio" name="gridFmt" value="jpeg">JPEG（体积更小）</label>
+          <label><input type="radio" name="gridFmt" value="webp">webP（体积更小）</label>
+        </div>
+      </div>
+      <p class="hint">提示：居中裁切后等分切割，支持自定义行列与一次拖入多张批量切割；发朋友圈按 1×1 → 3×3 的顺序上传即可拼出完整九宫格。</p>
+
+      <div class="actions" id="grid-actions">
+        <button class="btn btn-primary" id="cutBtn" disabled>切割</button>
+        <button class="btn btn-ghost" id="gridResetBtn">重置</button>
+      </div>
+
+      <p class="msg" id="gridMsg" role="status" aria-live="polite"></p>
+
+      <section class="result" id="gridResult" hidden>
+        <h2>切割结果</h2>
+        <p class="info" id="gridInfo"></p>
+        <div id="gridGroups"></div>
+        <div class="actions" style="margin-top:16px">
+          <button class="btn btn-blue" id="dlAllBtn" type="button">打包下载 ZIP</button>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ 工具三：图片压缩 ============ -->
+    <section id="tool-compress" hidden>
+      <div class="row" id="sec-c-files">
+        <span class="label">文件</span>
+        <div class="drop" id="compressDrop" tabindex="0" role="button" aria-label="选择、拖拽或粘贴图片，可多选">+ 选择 / 拖拽 / 粘贴 图片（可多选）</div>
+        <input type="file" id="compressFileInput" accept="image/*" multiple hidden>
+      </div>
+
+      <div class="row" id="sec-c-fmt">
+        <span class="label">输出格式</span>
+        <div class="opts opts-col">
+          <label><input type="radio" name="cFmt" value="webp" checked>webP <span class="desc">体积最小，兼容性较好</span></label>
+          <label><input type="radio" name="cFmt" value="mozjpeg">mozJPEG <span class="desc">输出 jpg，兼容性最好</span></label>
+          <label><input type="radio" name="cFmt" value="avif">avif <span class="desc">压缩率最高，编码最慢</span></label>
+          <label id="cAvifSpeedWrap" hidden>编码速度
+            <select id="cAvifSpeed" class="sel"><option value="6">标准</option><option value="8">快</option><option value="10" selected>最快</option></select>
+          </label>
+        </div>
+      </div>
+
+      <div class="row" id="sec-c-quality">
+        <span class="label">压缩质量</span>
+        <div class="opts">
+          <label>质量 <input type="range" id="cQuality" class="range-input" min="30" max="100" value="75"> <span class="desc" id="cQualityVal">75</span></label>
+          <label>目标体积(KB，0=不启用) <input type="number" id="cTargetKB" class="num-input" min="0" value="0"></label>
+        </div>
+      </div>
+      <p class="hint">提示：保持原始分辨率，仅重新编码压缩；所有处理在浏览器本地完成，不上传。可整个文件夹拖入批量压缩，多张时支持打包 ZIP；设置目标体积后会自动寻找满足体积的最高质量。</p>
+
+      <div class="file-list-header" id="cListHeader" hidden><span id="cCount"></span></div>
+      <div class="file-list" id="compressList"></div>
+
+      <div class="actions" id="compress-actions">
+        <button class="btn btn-primary" id="compressBtn">压缩</button>
+        <button class="btn btn-ghost" id="compressResetBtn">重置</button>
+      </div>
+
+      <p class="msg" id="compressMsg" role="status" aria-live="polite"></p>
+
+      <section class="result" id="compressResult" hidden>
+        <h2>压缩结果</h2>
+        <p class="info" id="compressInfo"></p>
+        <div id="compressResults"></div>
+        <div class="actions" style="margin-top:16px">
+          <button class="btn btn-blue" id="cZipBtn" type="button" hidden>打包下载 ZIP</button>
+        </div>
+        <p class="hint" style="margin-top:12px">输出已自动清除 EXIF 信息（含 GPS 定位、设备信息等隐私），可放心分享。点结果行的「对比」可拖动查看压缩前后画质。</p>
+      </section>
+    </section>
+  </div>
+</main>
+
+<div class="drop-overlay" id="dropOverlay" hidden>
+  <div class="drop-overlay-inner">松开鼠标，添加图片</div>
+</div>
+
+<div class="lightbox" id="lightbox" hidden>
+  <img id="lightboxImg" alt="放大预览">
+</div>
+
+<div class="lightbox" id="compareBox" hidden>
+  <div class="cmp-wrap">
+    <img id="cmpOrig" class="cmp-img" alt="压缩前">
+    <div class="cmp-overlay" id="cmpOverlay"><img id="cmpComp" class="cmp-img" alt="压缩后"></div>
+    <div class="cmp-divider" id="cmpDivider"></div>
+    <span class="cmp-tag cmp-tag-l">压缩前</span>
+    <span class="cmp-tag cmp-tag-r">压缩后</span>
+    <input type="range" id="cmpSlider" min="0" max="100" value="50">
+    <button class="cmp-close" id="cmpClose" type="button" aria-label="关闭对比">×</button>
+  </div>
+</div>
+
+<nav class="toc" id="toc" aria-label="页面目录"></nav>
+
+<div class="jump">
+  <button id="jumpTop" type="button" title="回到顶部" aria-label="回到顶部">↑</button>
+  <button id="jumpBottom" type="button" title="跳到底部" aria-label="跳到底部">↓</button>
+</div>
+
+<!-- 裸模块说明符兜底映射：本地 encoders 若残留 bare import 也能解析，无需联网 -->
+<script type="importmap">
+{
+  "imports": {
+    "wasm-feature-detect": "./encoders/shared/wasm-feature-detect.js"
+  }
+}
+</script>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const drop = $('#drop'), fileInput = $('#fileInput'), fileList = $('#fileList');
+  const listHeader = $('#listHeader'), listCount = $('#listCount'), sortByNameBtn = $('#sortByNameBtn');
+  const mergeBtn = $('#mergeBtn'), resetBtn = $('#resetBtn'), msg = $('#msg');
+  const result = $('#result'), resultImg = $('#resultImg'), resultInfo = $('#resultInfo'), downloadBtn = $('#downloadBtn');
+  const dropOverlay = $('#dropOverlay');
+  const h1Zh = $('#h1Zh'), h1En = $('#h1En');
+
+  // —— 工具切换 ——
+  const toolMeta = {
+    merge:    { zh: '拼接图片', en: 'Combine Images', title: '拼接图片 · Combine Images' },
+    grid:     { zh: '九宫格切割', en: 'Nine-Grid Cutter', title: '九宫格切割 · Nine-Grid Cutter' },
+    compress: { zh: '图片压缩', en: 'Image Compressor', title: '图片压缩 · Image Compressor' },
+  };
+  let currentTool = 'merge';
+  function switchTool(t) {
+    if (currentTool === t) return;
+    currentTool = t;
+    document.querySelectorAll('.tool-tab').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
+    $('#tool-merge').hidden = t !== 'merge';
+    $('#tool-grid').hidden = t !== 'grid';
+    $('#tool-compress').hidden = t !== 'compress';
+    h1Zh.textContent = toolMeta[t].zh;
+    h1En.textContent = toolMeta[t].en;
+    document.title = toolMeta[t].title;
+    renderToc();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  document.querySelectorAll('.tool-tab').forEach(b => b.addEventListener('click', () => switchTool(b.dataset.tool)));
+
+  // 按当前工具分发：状态消息与文件入口（函数在各自工具区块定义，调用时均已就绪）
+  const toolSetMsg = (t, isErr) => (currentTool === 'grid' ? setGridMsg(t, isErr) : currentTool === 'compress' ? setCMsg(t, isErr) : setMsg(t, isErr));
+  const toolAddFiles = (list) => (currentTool === 'grid' ? gridAddFiles(list) : currentTool === 'compress' ? compressAddFiles(list) : addFiles(list));
+
+  // —— 左侧目录：宽屏时显示，列出当前工具的区块，点击跳转、滚动高亮 ——
+  const toc = $('#toc');
+  const tocMap = {
+    merge: [
+      ['拼接模式', 'sec-mode'], ['压缩算法', 'sec-format'], ['质量/尺寸', 'sec-quality'],
+      ['拼接样式', 'sec-style'], ['水印', 'sec-watermark'], ['文件', 'sec-files'],
+      ['合并', 'sec-actions'], ['合并结果', 'result'], ['下载', 'downloadBtn'],
+    ],
+    grid: [
+      ['文件', 'sec-grid-files'], ['切割规格', 'sec-grid-n'], ['输出格式', 'sec-grid-fmt'],
+      ['切割', 'grid-actions'], ['切割结果', 'gridResult'], ['打包下载', 'dlAllBtn'],
+    ],
+    compress: [
+      ['文件', 'sec-c-files'], ['输出格式', 'sec-c-fmt'], ['压缩质量', 'sec-c-quality'],
+      ['压缩', 'compress-actions'], ['压缩结果', 'compressResult'], ['打包下载', 'cZipBtn'],
+    ],
+  };
+  function renderToc() {
+    toc.innerHTML = '';
+    for (const [label, targetId] of (tocMap[currentTool] || [])) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.dataset.target = targetId;
+      b.addEventListener('click', () => {
+        const el = document.getElementById(targetId);
+        if (el && !el.hidden && el.offsetParent) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      toc.append(b);
+    }
+    updateTocActive();
+  }
+  function updateTocActive() {
+    const btns = toc.querySelectorAll('button');
+    let current = null;
+    for (const b of btns) {
+      const el = document.getElementById(b.dataset.target);
+      if (!el || el.hidden || !el.offsetParent) continue;
+      if (el.getBoundingClientRect().top <= 80) current = b;
+    }
+    btns.forEach(b => b.classList.toggle('active', b === current));
+  }
+  window.addEventListener('scroll', updateTocActive, { passive: true });
+
+  /* ================= 工具一：拼接图片 ================= */
+
+  const items = []; // { uid, file, url }
+  let uidSeed = 0;
+  let sortMode = 'name'; // 'name' | 'time' | null（手动拖动后为 null，新添加的图片直接追加到末尾）
+  let lastResultUrl = null;
+
+  // 文件名自然排序：img2 排在 img10 前面
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+  const fmtSize = (n) => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(2) + ' MB';
+
+  // 图片判定：优先按 MIME；文件夹遍历出的文件 type 可能为空，再用扩展名兜底
+  const IMG_EXT_RE = /\.(jpe?g|png|gif|webp|bmp|avif|svg|ico|heic|heif|tiff?)$/i;
+  const isImageFile = (f) => !!(f.type && f.type.startsWith('image/')) || IMG_EXT_RE.test(f.name || '');
+
+  function setMsg(text, isErr = false) { msg.textContent = text; msg.classList.toggle('err', isErr); }
+
+  function sortByName() {
+    items.sort((a, b) => collator.compare(a.file.name || '', b.file.name || ''));
+  }
+
+  function sortByMode() {
+    if (sortMode === 'name') sortByName();
+    else if (sortMode === 'time') items.sort((a, b) => (a.file.lastModified || 0) - (b.file.lastModified || 0));
+  }
+
+  function updateListHeader() {
+    listHeader.hidden = items.length === 0;
+    listCount.textContent = '共 ' + items.length + ' 张，可按住条目上下拖动调整顺序';
+    const showSorts = items.length > 1;
+    sortByNameBtn.hidden = !showSorts;
+    sortByTimeBtn.hidden = !showSorts;
+  }
+
+  function addFiles(list) {
+    let added = 0;
+    for (const f of list) {
+      if (!f || !isImageFile(f)) continue;
+      items.push({ uid: ++uidSeed, file: f, url: URL.createObjectURL(f) });
+      added++;
+    }
+    if (added) {
+      if (sortMode) sortByMode();
+      renderList();
+      setMsg('已添加 ' + added + ' 张图片，共 ' + items.length + ' 张' + (sortMode ? '（按' + (sortMode === 'time' ? '修改时间' : '文件名') + '排序）' : '（已追加到末尾）'));
+    } else {
+      setMsg('未识别到图片文件', true);
+    }
+  }
+
+  // —— 拖动排序：桌面用 HTML5 拖放，触屏用长按后拖动 ——
+  let dragUid = null;
+  let dragInitialOrder = null;
+
+  const rows = () => Array.from(fileList.querySelectorAll('.file-item'));
+  const rowByUid = (uid) => fileList.querySelector('.file-item[data-uid="' + uid + '"]');
+
+  function moveRelative(dragging, target, clientY) {
+    const rect = target.getBoundingClientRect();
+    if (clientY > rect.top + rect.height / 2) target.parentNode.insertBefore(dragging, target.nextSibling);
+    else target.parentNode.insertBefore(dragging, target);
+  }
+
+  function beginDrag(row) {
+    if (dragUid) return;
+    dragUid = row.dataset.uid;
+    dragInitialOrder = rows().map(r => r.dataset.uid);
+    row.classList.add('dragging');
+  }
+
+  function commitDrag() {
+    const changed = dragInitialOrder &&
+      rows().map(r => r.dataset.uid).join(',') !== dragInitialOrder.join(',');
+    const dragging = dragUid && rowByUid(dragUid);
+    if (dragging) dragging.classList.remove('dragging');
+    if (changed) {
+      // 用 Map 建索引，把 O(n²) 的 indexOf 查找降为 O(n log n)
+      const rank = new Map();
+      rows().forEach((r, i) => rank.set(r.dataset.uid, i));
+      items.sort((a, b) => (rank.get(String(a.uid)) ?? 0) - (rank.get(String(b.uid)) ?? 0));
+      sortMode = null;
+      syncListNumbers();
+      setMsg('已手动调整顺序');
+    }
+    dragUid = null;
+    dragInitialOrder = null;
+    // DOM 已是拖拽后的最终顺序，无需重建列表
+  }
+
+  function attachTouchDrag(row) {
+    let lp = null;
+    const blockScroll = (e) => e.preventDefault();
+    row.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch' || dragUid || e.target.closest('button')) return;
+      lp = {
+        x: e.clientX, y: e.clientY, started: false,
+        timer: setTimeout(() => {
+          if (!lp || dragUid) return;
+          lp.started = true;
+          beginDrag(row);
+          if (navigator.vibrate) navigator.vibrate(15);
+          document.addEventListener('touchmove', blockScroll, { passive: false });
+        }, 260)
+      };
+      try { row.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    row.addEventListener('pointermove', (e) => {
+      if (!lp) return;
+      if (!lp.started) {
+        if (Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > 12) { clearTimeout(lp.timer); lp = null; }
+        return;
+      }
+      e.preventDefault();
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const target = el && el.closest ? el.closest('.file-item') : null;
+      const dragging = rowByUid(dragUid);
+      if (target && dragging && target !== dragging) moveRelative(dragging, target, e.clientY);
+    });
+    const finish = () => {
+      if (!lp) return;
+      clearTimeout(lp.timer);
+      const started = lp.started;
+      lp = null;
+      document.removeEventListener('touchmove', blockScroll);
+      if (started && dragUid) commitDrag();
+    };
+    row.addEventListener('pointerup', finish);
+    row.addEventListener('pointercancel', finish);
+  }
+  document.addEventListener('contextmenu', (e) => { if (dragUid) e.preventDefault(); });
+
+  // 顺序变化后只同步按钮禁用态，不重建 DOM
+  function syncListNumbers() {
+    const all = rows();
+    all.forEach((row, i) => {
+      const up = row.querySelector('.icon-btn[data-op="up"]');
+      const down = row.querySelector('.icon-btn[data-op="down"]');
+      if (up) up.disabled = i === 0;
+      if (down) down.disabled = i === all.length - 1;
+    });
+  }
+
+  // 交换相邻两行：直接操作 DOM 节点，避免整表重绘
+  function swapAdjacent(a, b) {
+    if (!a || !b) return;
+    const aSibling = a.nextSibling === b ? a : a.nextSibling;
+    b.parentNode.insertBefore(a, b);
+    a.parentNode.insertBefore(b, aSibling);
+  }
+
+  function buildRow(it) {
+    const row = document.createElement('div');
+    row.className = 'file-item';
+    row.dataset.uid = it.uid;
+    row.draggable = true;
+
+    const img = document.createElement('img');
+    img.className = 'thumb'; img.src = it.url; img.alt = '';
+    img.loading = 'lazy'; img.decoding = 'async';
+    img.draggable = false;
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = it.file.name || '(粘贴的图片)';
+    name.title = name.textContent;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    sub.textContent = fmtSize(it.file.size);
+    img.onload = () => { sub.textContent = img.naturalWidth + ' × ' + img.naturalHeight + ' · ' + fmtSize(it.file.size); };
+    meta.append(name, sub);
+
+    const ops = document.createElement('div');
+    ops.className = 'ops';
+    const up = document.createElement('button');
+    up.className = 'icon-btn'; up.type = 'button'; up.textContent = '↑'; up.title = '上移';
+    up.dataset.op = 'up';
+    const down = document.createElement('button');
+    down.className = 'icon-btn'; down.type = 'button'; down.textContent = '↓'; down.title = '下移';
+    down.dataset.op = 'down';
+    const del = document.createElement('button');
+    del.className = 'icon-btn'; del.type = 'button'; del.textContent = '✕'; del.title = '移除';
+    del.dataset.op = 'del';
+    ops.append(up, down, del);
+
+    row.addEventListener('dragstart', (e) => {
+      beginDrag(row);
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', String(it.uid)); } catch (_) {}
+    });
+    row.addEventListener('dragover', (e) => {
+      if (!dragUid || row.dataset.uid === dragUid) return;
+      const dragging = rowByUid(dragUid);
+      if (!dragging) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      moveRelative(dragging, row, e.clientY);
+    });
+    row.addEventListener('dragend', () => { if (dragUid) commitDrag(); });
+
+    attachTouchDrag(row);
+
+    row.append(img, meta, ops);
+    return row;
+  }
+
+  // 分批渲染：几百张图时避免一次性建 DOM 造成卡顿
+  let renderToken = 0;
+  function renderList() {
+    const token = ++renderToken;
+    fileList.innerHTML = '';
+    if (!items.length) { updateListHeader(); return; }
+    let i = 0;
+    const CHUNK = 60;
+    (function chunk() {
+      if (token !== renderToken) return;
+      const frag = document.createDocumentFragment();
+      const end = Math.min(items.length, i + CHUNK);
+      for (; i < end; i++) frag.append(buildRow(items[i]));
+      fileList.append(frag);
+      if (i < items.length) requestAnimationFrame(chunk);
+      else { syncListNumbers(); updateListHeader(); }
+    })();
+  }
+
+  // 事件委托：按钮点击统一在列表容器上处理
+  fileList.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.icon-btn') : null;
+    if (!btn) return;
+    const row = btn.closest('.file-item');
+    if (!row) return;
+    const uid = row.dataset.uid;
+    const idx = items.findIndex(it => String(it.uid) === uid);
+    if (idx < 0) return;
+    const op = btn.dataset.op;
+    if (op === 'up' && idx > 0) {
+      const prev = row.previousElementSibling;
+      swapAdjacent(prev, row);
+    } else if (op === 'down' && idx < items.length - 1) {
+      const next = row.nextElementSibling;
+      swapAdjacent(row, next);
+    } else if (op === 'del') {
+      URL.revokeObjectURL(items[idx].url);
+      row.remove();
+      items.splice(idx, 1);
+    } else {
+      return;
+    }
+    const rank = new Map();
+    rows().forEach((r, i) => rank.set(r.dataset.uid, i));
+    items.sort((a, b) => (rank.get(String(a.uid)) ?? 0) - (rank.get(String(b.uid)) ?? 0));
+    sortMode = null;
+    syncListNumbers();
+    updateListHeader();
+  });
+
+  fileList.addEventListener('dragover', (e) => {
+    if (!dragUid) return;
+    e.preventDefault();
+    const dragging = rowByUid(dragUid);
+    if (!dragging) return;
+    const last = fileList.lastElementChild;
+    if (!last || last === dragging) return;
+    const rect = last.getBoundingClientRect();
+    if (e.clientY > rect.top + rect.height / 2) fileList.append(dragging);
+  });
+  fileList.addEventListener('drop', (e) => { if (dragUid) e.preventDefault(); });
+
+  sortByNameBtn.addEventListener('click', () => {
+    sortMode = 'name';
+    sortByMode();
+    renderList();
+    setMsg('已按文件名重新排序');
+  });
+  $('#sortByTimeBtn').addEventListener('click', () => {
+    sortMode = 'time';
+    sortByMode();
+    renderList();
+    setMsg('已按修改时间排序（旧 → 新）');
+  });
+
+  drop.addEventListener('click', () => fileInput.click());
+  drop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+  });
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+  // 拖拽：整个页面都接受拖入的图片文件
+  const dtHasFiles = (e) => !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+  let dragDepth = 0;
+  window.addEventListener('dragenter', (e) => {
+    if (!dtHasFiles(e)) return;
+    e.preventDefault();
+    dragDepth++;
+    dropOverlay.hidden = false;
+  });
+  window.addEventListener('dragover', (e) => {
+    // 只接管「拖入文件」：无条件 preventDefault 会连拖放文本/链接进输入框一起吞掉
+    if (!dtHasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  });
+  window.addEventListener('dragleave', (e) => {
+    if (!dtHasFiles(e)) return;
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (!dragDepth) dropOverlay.hidden = true;
+  });
+
+  // 文件夹遍历：FileSystemEntry 为回调式 API，readEntries 需循环读到空才算读完
+  const readDirEntries = (dir) => new Promise((resolve) => {
+    const reader = dir.createReader();
+    const all = [];
+    const step = () => reader.readEntries((es) => {
+      if (es.length) { all.push(...es); step(); }
+      else resolve(all);
+    }, () => resolve(all));
+    step();
+  });
+  const entryFile = (entry) => new Promise((res) => entry.file(res, () => res(null)));
+  async function collectEntries(entry, out) {
+    if (!entry) return;
+    if (entry.isFile) out.push(entry);
+    else if (entry.isDirectory) {
+      const kids = await readDirEntries(entry);
+      for (const k of kids) await collectEntries(k, out);
+    }
+  }
+
+  window.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    dropOverlay.hidden = true;
+    if (dragUid) return; // 列表内排序的拖放，不当作外部文件
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    const setCurMsg = toolSetMsg;
+    // webkitGetAsEntry 只能在 drop 事件内同步调用，事件结束后 DataTransferItem 即失效
+    const entries = [], plainFiles = [];
+    for (const item of Array.from(dt.items || [])) {
+      if (item.kind !== 'file') continue;
+      const en = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+      if (en) entries.push(en);
+      else { const f = item.getAsFile(); if (f) plainFiles.push(f); }
+    }
+    // 既没有目录条目也没有文件，说明拖的是文本/链接，静默忽略
+    if (!entries.length && !dt.files.length) return;
+    const hasFolder = entries.some(en => en.isDirectory);
+    if (hasFolder) setCurMsg('正在读取文件夹…');
+    // 先递归收集目录条目，再小并发读取文件（8 路），大文件夹明显更快
+    const dirEntries = [];
+    for (const en of entries) await collectEntries(en, dirEntries);
+    const fetched = (await mapLimit(dirEntries, 8, entryFile)).filter(Boolean);
+    const out = plainFiles.concat(fetched);
+    const files = out.length ? out : Array.from(dt.files || []);
+    const imgs = files.filter(isImageFile);
+    if (!imgs.length) return setCurMsg(hasFolder ? '文件夹中没有找到图片文件' : '未识别到图片文件', true);
+    toolAddFiles(imgs);
+  });
+  window.addEventListener('dragend', () => { dragDepth = 0; dropOverlay.hidden = true; });
+
+  // 粘贴（页面任意位置 Ctrl+V，按当前工具分发）
+  document.addEventListener('paste', (e) => {
+    const files = Array.from(e.clipboardData ? e.clipboardData.items : [])
+      .filter(it => it.kind === 'file' && it.type.startsWith('image/'))
+      .map(it => it.getAsFile())
+      .filter(Boolean);
+    if (files.length) {
+      toolAddFiles(files);
+      e.preventDefault();
+    }
+  });
+
+  // canvas → Blob。优先走异步 toBlob；仅当长时间无回调时才降级，
+  // 且降级路径也保留 quality，并避免在并行编码时互相抢占主线程。
+  const canvasToBlob = (canvas, mime, quality) => new Promise((resolve, reject) => {
+    let done = false;
+    const settle = (fn, arg) => { if (done) return; done = true; clearTimeout(timer); fn(arg); };
+    const timer = setTimeout(() => {
+      if (done) return;
+      try {
+        const url = canvas.toDataURL(mime, quality);
+        const bin = atob((url.split(',')[1] || ''));
+        const arr = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        // 同步 toDataURL 可能悄悄返回 png（不支持该 mime 时），此处按实际类型标注
+        const realMime = (url.slice(5, url.indexOf(';')) || mime);
+        settle(resolve, new Blob([arr], { type: realMime }));
+      } catch (e) {
+        settle(reject, new Error('图片编码失败：' + e.message));
+      }
+    }, 8000);
+    canvas.toBlob((b) => {
+      if (done) return;
+      if (b) settle(resolve, b);
+      else settle(reject, new Error('图片编码失败（通常因尺寸或内存超出浏览器限制，建议减少图片数量或分辨率）'));
+    }, mime, quality);
+  });
+
+  // 受限并发执行：避免一次性创建过多 canvas 导致内存峰值过高
+  async function mapLimit(list, limit, worker) {
+    const out = new Array(list.length);
+    let cursor = 0;
+    const runners = new Array(Math.max(1, Math.min(limit, list.length))).fill(0).map(async () => {
+      while (true) {
+        const i = cursor++;
+        if (i >= list.length) return;
+        out[i] = await worker(list[i], i);
+      }
+    });
+    await Promise.all(runners);
+    return out;
+  }
+
+  // 安全求最大值（避免大数组展开导致调用栈溢出）
+  function maxOf(arr, pick) {
+    let m = -Infinity;
+    for (let i = 0; i < arr.length; i++) { const v = pick(arr[i]); if (v > m) m = v; }
+    return m;
+  }
+
+  const loadImg = (url) => new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => res(im);
+    im.onerror = () => rej(new Error('图片解码失败'));
+    im.src = url;
+  });
+
+  // createImageBitmap 在后台线程解码，大图不再卡 UI；不支持或解码失败时回退 <img>
+  const srcW = (s) => ('naturalWidth' in s) ? s.naturalWidth : s.width;
+  const srcH = (s) => ('naturalHeight' in s) ? s.naturalHeight : s.height;
+  async function decodeSource(file) {
+    if (window.createImageBitmap) {
+      try { return await createImageBitmap(file); } catch (_) { /* 走 <img> 兜底 */ }
+    }
+    const url = URL.createObjectURL(file);
+    try { return await loadImg(url); } finally { URL.revokeObjectURL(url); }
+  }
+
+  // 解码失败时把文件名带进错误信息，否则几十张图里根本不知道是哪一张出问题
+  async function decodeNamed(file) {
+    try {
+      return await decodeSource(file);
+    } catch (_) {
+      const n = file && file.name ? '「' + file.name + '」' : '粘贴的图片';
+      throw new Error('无法解码 ' + n + '（格式不受浏览器支持或文件已损坏）');
+    }
+  }
+
+  // 文字水印：支持四角 / 居中 / 平铺
+  function drawWatermark(ctx, W, H, o) {
+    if (!o.text) return;
+    const pad = Math.round(o.size * 0.6);
+    ctx.save();
+    ctx.globalAlpha = o.opacity;
+    ctx.fillStyle = o.color;
+    ctx.font = '600 ' + o.size + 'px -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif';
+    const tw = ctx.measureText(o.text).width, th = o.size;
+    ctx.shadowColor = 'rgba(0, 0, 0, .3)';
+    ctx.shadowBlur = Math.round(o.size * 0.15);
+    if (o.pos === 'tile') {
+      const stepX = tw + o.size * 2.5, stepY = th * 3.5;
+      for (let y = th + pad; y < H + th; y += stepY)
+        for (let x = pad; x < W + tw; x += stepX) ctx.fillText(o.text, x, y);
+    } else {
+      const posMap = {
+        br: [W - tw - pad, H - pad], bl: [pad, H - pad],
+        tr: [W - tw - pad, th + pad], tl: [pad, th + pad],
+        c: [(W - tw) / 2, (H + th) / 2],
+      };
+      const [x, y] = posMap[o.pos] || posMap.br;
+      ctx.fillText(o.text, Math.max(pad, Math.min(W - tw - pad, x)), Math.max(th, Math.min(H - pad, y)));
+    }
+    ctx.restore();
+  }
+
+  // —— 压缩引擎：与 PicX 相同的 Squoosh WASM 编码器（jSquash），质量用 Squoosh 默认值 ——
+  // mozJPEG 75（progressive）· WebP 75 · AVIF 50/speed 6
+  // 优先加载页面旁 encoders/ 目录的本地副本（离线可用），缺失时回退 CDN
+  const CODEC_SRCS = {
+    mozjpeg: ['./encoders/jpeg/encode.js', 'https://esm.sh/@jsquash/jpeg@1.6.0', 'https://cdn.jsdelivr.net/npm/@jsquash/jpeg@1.6.0/+esm'],
+    webp:    ['./encoders/webp/encode.js', 'https://esm.sh/@jsquash/webp@1.5.0', 'https://cdn.jsdelivr.net/npm/@jsquash/webp@1.5.0/+esm'],
+    avif:    ['./encoders/avif/encode.js', 'https://esm.sh/@jsquash/avif@2.1.1', 'https://cdn.jsdelivr.net/npm/@jsquash/avif@2.1.1/+esm'],
+  };
+  const MIME = { webp: 'image/webp', mozjpeg: 'image/jpeg', avif: 'image/avif' };
+  const EXT = { webp: 'webp', mozjpeg: 'jpg', avif: 'avif' };
+  const FMT_LABEL = { webp: 'webP', mozjpeg: 'mozJPEG', avif: 'avif' };
+  const encoderCache = {};
+
+  async function getSquooshEncoder(fmt) {
+    if (encoderCache[fmt]) return encoderCache[fmt];
+    let lastErr;
+    for (const url of CODEC_SRCS[fmt]) {
+      try {
+        const mod = await import(url);
+        // 本地 jSquash 包导出的是 default，CDN 转译版可能暴露为具名 encode，两者都接受
+        const fn = (mod && (mod.encode || mod.default)) || null;
+        if (typeof fn === 'function') return (encoderCache[fmt] = fn);
+        lastErr = new Error('模块未导出编码函数：' + url);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('编码器加载失败');
+  }
+
+  // —— Worker 编码池：WASM 编码移到后台线程，AVIF / 大图不再冻结页面 ——
+  // file:// 下 Worker 不可用、URL 加 ?noworker 可强制关闭，两种情况均自动回退主线程
+  const workerPool = (() => {
+    if (typeof Worker === 'undefined' || /[?&]noworker\b/.test(location.search)) return null;
+    let workerSrc;
+    try { workerSrc = new URL('worker.js', document.baseURI).href; } catch (_) { return null; }
+    let broken = false, seq = 0;
+    const workers = [];
+    const SIZE = Math.max(2, Math.min(4, navigator.hardwareConcurrency || 4));
+    function getWorker() {
+      if (broken) return null;
+      if (workers.length < SIZE) {
+        try {
+          const w = new Worker(workerSrc, { type: 'module' });
+          const st = { w, jobs: new Map(), load: 0 };
+          w.onmessage = (e) => {
+            const job = st.jobs.get(e.data.id);
+            if (!job) return;
+            st.jobs.delete(e.data.id);
+            st.load--;
+            if (e.data.ok) job.res(e.data.buf);
+            else job.rej(new Error(e.data.message || 'worker 编码失败'));
+          };
+          w.onerror = () => {
+            broken = true;
+            st.jobs.forEach((j) => j.rej(new Error('worker 加载失败')));
+            st.jobs.clear();
+            st.load = 0;
+          };
+          workers.push(st);
+          return st;
+        } catch (_) { broken = true; return null; }
+      }
+      return workers.reduce((a, b) => (a.load <= b.load ? a : b));
+    }
+    return {
+      get broken() { return broken; },
+      encode(imageData, fmt, options) {
+        return new Promise((res, rej) => {
+          const st = getWorker();
+          if (!st) return rej(new Error('worker 不可用'));
+          const id = ++seq;
+          const buf = imageData.data.buffer;
+          st.jobs.set(id, { res, rej });
+          st.load++;
+          // 像素缓冲按 transferable 零拷贝移交，避免大数组再复制一份
+          st.w.postMessage({ id, fmt, buf, width: imageData.width, height: imageData.height, options }, [buf]);
+        });
+      },
+    };
+  })();
+
+  async function squooshEncode(imageData, fmt, options) {
+    const encode = await getSquooshEncoder(fmt);
+    const buffer = await encode(imageData, options || {}); // 缺省参数 = Squoosh/PicX 默认质量
+    return new Blob([buffer], { type: MIME[fmt] });
+  }
+
+  // 统一编码入口：优先 Worker，任何失败都自动回退主线程重试
+  async function encodeImage(canvas, fmt, options) {
+    const ctx = canvas.getContext('2d');
+    if (workerPool && !workerPool.broken) {
+      try {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const buf = await workerPool.encode(imageData, fmt, options);
+        return { blob: new Blob([buf], { type: MIME[fmt] }), engine: 'worker' };
+      } catch (_) { /* 回退主线程 */ }
+    }
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return { blob: await squooshEncode(imageData, fmt, options), engine: 'main' };
+  }
+
+  mergeBtn.addEventListener('click', async () => {
+    if (!items.length) return setMsg('请先添加图片', true);
+    mergeBtn.disabled = true;
+    setMsg('合并中…');
+    await new Promise(r => setTimeout(r, 50)); // 让状态先渲染出来
+    try {
+      // 并发解码（后台线程），多图时不再逐张串行等待
+      setMsg('解码图片中…');
+      await new Promise(r => setTimeout(r, 20));
+      const imgs = await mapLimit(items, 4, (it) => decodeNamed(it.file));
+
+      const mode = document.querySelector('input[name="mode"]:checked').value; // vertical | horizontal | grid3
+      const vertical = mode === 'vertical';
+      const gridMode = mode === 'grid3';
+      const fmt = document.querySelector('input[name="format"]:checked').value; // webp | mozjpeg | avif
+      const quality = Math.max(30, Math.min(100, +$('#quality').value || 75));
+      const encodeOptions = fmt === 'avif'
+        ? { quality, speed: +$('#avifSpeed').value || 10 }
+        : { quality };
+
+      // 样式：间距 / 边距 / 圆角 / 背景色（作用于所有拼接模式）
+      let gapE = Math.max(0, Math.min(200, +$('#gapPx').value || 0));
+      let marginE = Math.max(0, Math.min(200, +$('#marginPx').value || 0));
+      let radiusE = Math.max(0, Math.min(500, +$('#radiusPx').value || 0));
+      const bgColor = $('#bgColor').value;
+      // 背景色被改过也算「用了拼接样式」，否则只调背景色会毫无效果
+      const useStyle = gapE > 0 || marginE > 0 || radiusE > 0 || bgColor.toLowerCase() !== '#000000';
+
+      // 尺寸计算
+      // 纵向/横向：统一为最大宽度（纵向）/最大高度（横向），其余等比缩放
+      // 九宫格：所有图居中裁切成统一单元格
+      const target = vertical
+        ? maxOf(imgs, m => srcW(m))
+        : maxOf(imgs, m => srcH(m));
+      let boxes, cols = 0, rowsN = 0, unified;
+      if (gridMode) {
+        const A = imgs.reduce((s, m) => s + srcW(m) / srcH(m), 0) / imgs.length;
+        const ch = maxOf(imgs, m => srcH(m));
+        const cw = Math.round(ch * A);
+        boxes = imgs.map(() => ({ w: cw, h: ch }));
+        cols = 3; rowsN = Math.ceil(imgs.length / 3);
+        unified = true;
+      } else {
+        boxes = imgs.map((im) => {
+          if (vertical) return { w: target, h: Math.max(1, Math.round(srcH(im) * (target / srcW(im)))) };
+          return { w: Math.max(1, Math.round(srcW(im) * (target / srcH(im)))), h: target };
+        });
+        unified = new Set(imgs.map(m => vertical ? srcW(m) : srcH(m))).size > 1;
+      }
+
+      // 累计偏移预先算好，避免绘制循环内反复 slice+reduce（O(n²)）
+      let offsets = [];
+      const computeOffsets = () => {
+        offsets = [];
+        let acc = 0;
+        for (let i = 0; i < boxes.length; i++) {
+          offsets.push(acc);
+          acc += (vertical ? boxes[i].h : boxes[i].w) + (i < boxes.length - 1 ? gapE : 0);
+        }
+        return acc;
+      };
+
+      const computeTotals = () => {
+        const span = computeOffsets();
+        if (gridMode) { width = boxes[0].w * cols + (cols - 1) * gapE; height = boxes[0].h * rowsN + (rowsN - 1) * gapE; }
+        else if (vertical) { width = boxes[0].w; height = span; }
+        else { height = boxes[0].h; width = span; }
+        width += marginE * 2; height += marginE * 2;
+      };
+      let width, height;
+      computeTotals();
+
+      // 最长边限制：0 = 不限制
+      const maxEdge = Math.max(0, +$('#maxEdge').value || 0);
+      let capNote = '';
+      if (maxEdge > 0) {
+        const long = Math.max(width, height);
+        if (long > maxEdge) {
+          const k = maxEdge / long;
+          for (const b of boxes) { b.w = Math.max(1, Math.round(b.w * k)); b.h = Math.max(1, Math.round(b.h * k)); }
+          gapE = Math.round(gapE * k); marginE = Math.round(marginE * k); radiusE = Math.round(radiusE * k);
+          computeTotals();
+          capNote = '已按最长边 ' + maxEdge + ' px 缩小';
+        }
+      }
+
+      // 浏览器画布尺寸上限保护：超出时整体等比缩小输出，避免编码失败
+      const MAX_DIM = 16384, MAX_AREA = 100e6;
+      let over = Math.max(width / MAX_DIM, height / MAX_DIM, (width * height) / MAX_AREA);
+      let shrinkNote = '';
+      if (over > 1) {
+        const ow = width, oh = height;
+        for (let guard = 0; over > 1 && guard < 8; guard++) {
+          const k = 1 / (over * 1.01);
+          for (const b of boxes) { b.w = Math.max(1, Math.round(b.w * k)); b.h = Math.max(1, Math.round(b.h * k)); }
+          gapE = Math.round(gapE * k); marginE = Math.round(marginE * k); radiusE = Math.round(radiusE * k);
+          computeTotals();
+          over = Math.max(width / MAX_DIM, height / MAX_DIM, (width * height) / MAX_AREA);
+        }
+        shrinkNote = '已自动缩小（原尺寸 ' + ow + ' × ' + oh + ' 超出画布上限）';
+        setMsg('图片总尺寸过大，已自动缩小输出，编码中…');
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('无法创建画布');
+      // 背景填充规则：有样式时用所选背景色；否则保持原行为（九宫格黑底、jpg 白底、其余透明）
+      const bgFill = useStyle ? bgColor : (gridMode ? '#000000' : (fmt === 'mozjpeg' ? '#ffffff' : null));
+      if (bgFill) {
+        ctx.fillStyle = bgFill;
+        ctx.fillRect(0, 0, width, height);
+      }
+      const roundRectPath = (c, x, y, w, h, r) => {
+        r = Math.max(0, Math.min(r, w / 2, h / 2));
+        c.beginPath();
+        if (c.roundRect) { c.roundRect(x, y, w, h, r); return; }
+        c.moveTo(x + r, y);
+        c.arcTo(x + w, y, x + w, y + h, r);
+        c.arcTo(x + w, y + h, x, y + h, r);
+        c.arcTo(x, y + h, x, y, r);
+        c.arcTo(x, y, x + w, y, r);
+        c.closePath();
+      };
+
+      imgs.forEach((im, i) => {
+        const b = boxes[i];
+        let dx, dy;
+        if (gridMode) {
+          const r = Math.floor(i / 3), c = i % 3;
+          dx = marginE + c * (b.w + gapE);
+          dy = marginE + r * (b.h + gapE);
+          if (r === rowsN - 1) {
+            // 末排居中：偏移量吸附到整数像素，避免 drawImage 亚像素插值造成的边缘模糊
+            const rem = imgs.length - (rowsN - 1) * 3;
+            dx = Math.round(dx + ((3 - rem) / 2) * (b.w + gapE));
+          }
+        } else {
+          dx = marginE + (vertical ? 0 : offsets[i]);
+          dy = marginE + (vertical ? offsets[i] : 0);
+        }
+        const sw = srcW(im), sh = srcH(im);
+        if (radiusE > 0) {
+          ctx.save();
+          roundRectPath(ctx, dx, dy, b.w, b.h, radiusE);
+          ctx.clip();
+          if (gridMode) {
+            const s = Math.max(sw / b.w, sh / b.h);
+            const cw2 = b.w * s, ch2 = b.h * s;
+            ctx.drawImage(im, (sw - cw2) / 2, (sh - ch2) / 2, cw2, ch2, dx, dy, b.w, b.h);
+          } else {
+            ctx.drawImage(im, dx, dy, b.w, b.h);
+          }
+          ctx.restore();
+          return;
+        }
+        if (gridMode) {
+          const s = Math.max(sw / b.w, sh / b.h);
+          const cw2 = b.w * s, ch2 = b.h * s;
+          ctx.drawImage(im, (sw - cw2) / 2, (sh - ch2) / 2, cw2, ch2, dx, dy, b.w, b.h);
+          return;
+        }
+        ctx.drawImage(im, dx, dy, b.w, b.h);
+      });
+      // 解码位图用完即释放，控制内存峰值
+      imgs.forEach((im) => { if (im.close) im.close(); });
+
+      // 文字水印（在所有图片绘制完成后叠加）
+      if ($('#wmEnable').checked) {
+        drawWatermark(ctx, width, height, {
+          text: $('#wmText').value.trim(),
+          size: Math.max(8, Math.min(200, +$('#wmSize').value || 24)),
+          opacity: Math.max(0.1, Math.min(1, (+$('#wmOpacity').value || 40) / 100)),
+          pos: $('#wmPos').value,
+          color: $('#wmColor').value,
+        });
+      }
+
+      const srcTotal = items.reduce((s, it) => s + it.file.size, 0);
+
+      if (!encoderCache[fmt]) {
+        setMsg('正在加载 ' + FMT_LABEL[fmt] + ' 编码器…');
+        await new Promise(r => setTimeout(r, 30));
+      }
+      // 编码期间每秒刷新已用时：AVIF 较慢，让用户知道页面没有卡死
+      const encodeT0 = Date.now();
+      const encodeTick = setInterval(() => {
+        const s = Math.round((Date.now() - encodeT0) / 1000);
+        setMsg(fmt === 'avif' ? 'AVIF 编码中（较慢）… 已用时 ' + s + ' 秒' : '编码中… 已用时 ' + s + ' 秒');
+      }, 1000);
+      let blob, qualityNote, engineNote;
+      try {
+        try {
+          const r = await encodeImage(canvas, fmt, encodeOptions);
+          blob = r.blob;
+          qualityNote = '质量 ' + quality;
+          engineNote = r.engine === 'worker' ? '压缩引擎（Squoosh WASM · Worker）' : '压缩引擎（Squoosh WASM · 主线程）';
+        } catch (err) {
+          if (fmt === 'avif') throw new Error('AVIF 编码器加载失败（需联网加载 WASM），请检查网络后重试');
+          const mime = fmt === 'webp' ? 'image/webp' : 'image/jpeg';
+          blob = await canvasToBlob(canvas, mime, quality / 100);
+          qualityNote = '质量 ' + quality + '（原生回退）';
+          engineNote = 'WASM 编码器加载失败，已用浏览器原生编码';
+        }
+      } finally {
+        clearInterval(encodeTick);
+      }
+      // 浏览器可能返回带参数（如 ;charset=）或空 type 的 Blob，此处做容错判断
+      const actualType = (blob.type || '').split(';')[0].trim().toLowerCase();
+      if (actualType && actualType !== MIME[fmt].toLowerCase()) {
+        throw new Error('当前浏览器不支持导出 ' + MIME[fmt] + '（实际输出 ' + actualType + '），请更换压缩算法');
+      }
+
+      if (lastResultUrl) URL.revokeObjectURL(lastResultUrl);
+      lastResultUrl = URL.createObjectURL(blob);
+      resultImg.src = lastResultUrl;
+      downloadBtn.href = lastResultUrl;
+      const d = new Date(), p = (n) => String(n).padStart(2, '0');
+      downloadBtn.download = 'merged-' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+                             '-' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '.' + EXT[fmt];
+      const saved = srcTotal > 0 ? Math.round((1 - blob.size / srcTotal) * 100) : 0;
+      resultInfo.textContent = imgs.length + ' 张图片 · ' + width + ' × ' + height + ' px · ' + fmtSize(blob.size) +
+                               ' · ' + qualityNote + ' · ' + engineNote +
+                               (gridMode ? ' · 已统一单元格（居中裁切）' : (unified ? ' · 已统一' + (vertical ? '宽度' : '高度') : '')) +
+                               (shrinkNote ? ' · ' + shrinkNote : '') +
+                               (capNote ? ' · ' + capNote : '') +
+                               (srcTotal > 0 ? ' · 原图合计 ' + fmtSize(srcTotal) +
+                                 (saved >= 0 ? '，节省 ' + saved + '%' : '，比原图大 ' + (-saved) + '%') : '');
+      result.hidden = false;
+      setMsg('合并完成，共 ' + imgs.length + ' 张图片');
+      result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      mergeBtn.disabled = false;
+      setMsg('合并失败：' + err.message, true);
+      return;
+    }
+    mergeBtn.disabled = false;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    items.forEach(it => URL.revokeObjectURL(it.url));
+    items.length = 0;
+    sortMode = 'name';
+    renderList();
+    if (lastResultUrl) { URL.revokeObjectURL(lastResultUrl); lastResultUrl = null; }
+    result.hidden = true;
+    resultImg.removeAttribute('src');
+    downloadBtn.removeAttribute('href');
+    setMsg('');
+    document.querySelector('input[name="mode"][value="vertical"]').checked = true;
+    document.querySelector('input[name="format"][value="mozjpeg"]').checked = true;
+    $('#maxEdge').value = 0; $('#gapPx').value = 0; $('#marginPx').value = 0; $('#radiusPx').value = 0;
+    $('#bgColor').value = '#000000'; $('#avifSpeed').value = '10';
+    $('#wmEnable').checked = false; $('#wmOpts').hidden = true;
+    $('#wmText').value = ''; $('#wmSize').value = 24; $('#wmOpacity').value = 40;
+    $('#wmOpacityVal').textContent = '40%'; $('#wmPos').value = 'br'; $('#wmColor').value = '#ffffff';
+    syncMergeFmtUI(true);
+  });
+
+  /* ================= 工具二：九宫格切割 ================= */
+
+  const gridDrop = $('#gridDrop'), gridFileInput = $('#gridFileInput');
+  const cutBtn = $('#cutBtn'), gridResetBtn = $('#gridResetBtn'), gridMsg = $('#gridMsg');
+  const gridResult = $('#gridResult'), gridInfo = $('#gridInfo'), gridGroupsBox = $('#gridGroups'), dlAllBtn = $('#dlAllBtn');
+  let gridQueue = [];   // { uid, file, url, base }
+  let gridGroups = [];  // { base, info, tiles: [{ name, folder, url, blob }] }
+  let zipName = 'tiles.zip';
+
+  const setGridMsg = (text, isErr = false) => { gridMsg.textContent = text; gridMsg.classList.toggle('err', isErr); };
+  const clearGridResults = () => {
+    gridGroups.forEach(g => g.tiles.forEach(t => URL.revokeObjectURL(t.url)));
+    gridGroups = [];
+    gridGroupsBox.innerHTML = '';
+  };
+  const allGridTiles = () => gridGroups.flatMap(g => g.tiles);
+
+  function gridAddFiles(list) {
+    const files = Array.from(list || []).filter(isImageFile);
+    if (!files.length) return setGridMsg('未识别到图片文件', true);
+    for (const f of files) {
+      const base = ((f.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
+      gridQueue.push({ uid: ++uidSeed, file: f, url: URL.createObjectURL(f), base });
+    }
+    cutBtn.disabled = false;
+    setGridMsg('已添加 ' + files.length + ' 张，共 ' + gridQueue.length + ' 张，点击“切割”');
+  }
+
+  gridDrop.addEventListener('click', () => gridFileInput.click());
+  gridDrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); gridFileInput.click(); }
+  });
+  gridFileInput.addEventListener('change', () => { gridAddFiles(gridFileInput.files); gridFileInput.value = ''; });
+
+  // 切割单张：居中取最大 C:R 裁切窗口，等分为 R×C 块
+  async function cutOne(item, R, C, fmt, mime, qi, total, onProgress) {
+    const im = await decodeSource(item.file);
+    const W = srcW(im), H = srcH(im);
+    let cropW, cropH;
+    if (W / H > C / R) { cropH = H; cropW = H * C / R; }
+    else { cropW = W; cropH = W * R / C; }
+    const tileW = Math.floor(cropW / C), tileH = Math.floor(cropH / R);
+    if (tileW < 1 || tileH < 1) { if (im.close) im.close(); throw new Error('图片太小，无法切割'); }
+    const gridW = tileW * C, gridH = tileH * R;
+    // 起点取整：否则 drawImage 会做亚像素采样，切块边缘发虚
+    const sx0 = Math.floor((W - gridW) / 2), sy0 = Math.floor((H - gridH) / 2);
+
+    const jobs = [];
+    for (let r = 0; r < R; r++) {
+      for (let c = 0; c < C; c++) jobs.push({ r, c, sx: sx0 + c * tileW, sy: sy0 + r * tileH });
+    }
+    let finished = 0;
+    const blobs = await mapLimit(jobs, 4, async (job) => {
+      const cv = document.createElement('canvas');
+      cv.width = tileW; cv.height = tileH;
+      const cx = cv.getContext('2d');
+      if (fmt === 'jpeg') { cx.fillStyle = '#000000'; cx.fillRect(0, 0, tileW, tileH); }
+      cx.drawImage(im, job.sx, job.sy, tileW, tileH, 0, 0, tileW, tileH);
+      // 编码完成后立即释放画布，控制内存峰值
+      let blob;
+      if (fmt === 'webp') blob = (await encodeImage(cv, 'webp', { quality: 80 })).blob;
+      else blob = await canvasToBlob(cv, mime, 0.92);
+      cv.width = cv.height = 0;
+      finished++;
+      onProgress(finished, jobs.length);
+      return blob;
+    });
+    if (im.close) im.close();
+    const folder = (total > 1 ? (qi + 1) + '-' : '') + item.base;
+    const tiles = blobs.map((blob, i) => {
+      const { r, c } = jobs[i];
+      const name = (total > 1 ? (qi + 1) + '-' : '') + item.base + '_' + (r + 1) + 'x' + (c + 1) + '.' + fmt;
+      return { name, folder, blob, url: URL.createObjectURL(blob) };
+    });
+    return {
+      base: item.base,
+      info: item.base + ' · 原图 ' + W + ' × ' + H + ' px → 居中裁切 ' + gridW + ' × ' + gridH + ' px，每块 ' + tileW + ' × ' + tileH + ' px · 共 ' + tiles.length + ' 块',
+      tiles,
+    };
+  }
+
+  function renderGridGroup(group, C) {
+    const wrap = document.createElement('div');
+    wrap.className = 'grid-group';
+    const info = document.createElement('p');
+    info.className = 'info'; info.style.margin = '0 0 12px';
+    info.textContent = group.info;
+    const tiles = document.createElement('div');
+    tiles.className = 'tiles';
+    tiles.style.gridTemplateColumns = 'repeat(' + C + ', 1fr)';
+    group.tiles.forEach(t => {
+      const cell = document.createElement('div');
+      cell.className = 'tile';
+      const img = document.createElement('img');
+      img.src = t.url; img.alt = t.name; img.loading = 'lazy'; img.decoding = 'async';
+      const cap = document.createElement('div');
+      cap.className = 't-name'; cap.textContent = t.name; cap.title = t.name;
+      const a = document.createElement('a');
+      a.className = 'mini-btn'; a.href = t.url; a.download = t.name; a.textContent = '下载';
+      cell.append(img, cap, a);
+      tiles.append(cell);
+    });
+    wrap.append(info, tiles);
+    gridGroupsBox.append(wrap);
+  }
+
+  cutBtn.addEventListener('click', async () => {
+    if (!gridQueue.length) return;
+    const nSel = document.querySelector('input[name="gridN"]:checked').value;
+    let R, C;
+    if (nSel === 'custom') {
+      R = Math.max(1, Math.min(10, +$('#gridRows').value || 2));
+      C = Math.max(1, Math.min(10, +$('#gridCols').value || 3));
+    } else { R = C = +nSel; }
+    const fmt = document.querySelector('input[name="gridFmt"]:checked').value; // png | jpeg | webp
+    const mime = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' }[fmt];
+    cutBtn.disabled = true;
+    try {
+      clearGridResults();
+      gridResult.hidden = false;
+      let totalTiles = 0;
+      const failed = [];
+      for (let qi = 0; qi < gridQueue.length; qi++) {
+        let group;
+        try {
+          group = await cutOne(gridQueue[qi], R, C, fmt, mime, qi, gridQueue.length, (done, total) => {
+            setGridMsg('切割中… 第 ' + (qi + 1) + ' / ' + gridQueue.length + ' 张 · ' + done + ' / ' + total + ' 块');
+          });
+        } catch (err) {
+          // 单张失败不拖垮整批：记下文件名继续切下一张
+          failed.push(gridQueue[qi].base + '（' + err.message + '）');
+          continue;
+        }
+        gridGroups.push(group);
+        renderGridGroup(group, C);
+        totalTiles += group.tiles.length;
+      }
+      if (!gridGroups.length) throw new Error('全部切割失败：' + failed.join('；'));
+      zipName = gridGroups.length === 1
+        ? gridGroups[0].base + '_' + R + 'x' + C + '.zip'
+        : '九宫格切割_' + R + 'x' + C + '.zip';
+      gridInfo.textContent = '共 ' + gridGroups.length + ' 张 · ' + totalTiles + ' 块 · ' + fmt.toUpperCase() +
+        (gridGroups.length > 1 ? ' · 打包时按图片分文件夹' : '') +
+        (failed.length ? ' · ' + failed.length + ' 张失败已跳过' : '');
+      setGridMsg('切割完成，共 ' + gridGroups.length + ' 张 · ' + totalTiles + ' 块' +
+        (failed.length ? '，' + failed.length + ' 张失败已跳过' : ''));
+      gridResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      setGridMsg('切割失败：' + err.message, true);
+    }
+    cutBtn.disabled = false;
+  });
+
+  // —— 最小 ZIP 打包（仅 store 不压缩：PNG/JPEG 本身已是压缩格式；单文件 < 4GB 无需 ZIP64）——
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[n] = c >>> 0;
+    }
+    return t;
+  })();
+  const crc32 = (u8) => {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  };
+  async function makeZip(files) { // files: [{ name, blob }]
+    const enc = new TextEncoder();
+    const now = new Date();
+    const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    const dosDate = (((now.getFullYear() - 1980) & 0x7f) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    const chunks = [], central = [];
+    let offset = 0;
+    for (const f of files) {
+      const size = f.blob.size;
+      const crc = crc32(new Uint8Array(await f.blob.arrayBuffer()));
+      const nameBytes = enc.encode(f.name);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true);
+      lh.setUint16(4, 20, true);       // 版本 2.0
+      lh.setUint16(6, 0x0800, true);   // UTF-8 文件名标志
+      lh.setUint16(8, 0, true);        // store
+      lh.setUint16(10, dosTime, true);
+      lh.setUint16(12, dosDate, true);
+      lh.setUint32(14, crc, true);
+      lh.setUint32(18, size, true);
+      lh.setUint32(22, size, true);
+      lh.setUint16(26, nameBytes.length, true);
+      // 直接把原 Blob 当作 ZIP 分片：store 模式下无需复制，避免整包数据在内存里存两份
+      chunks.push(new Uint8Array(lh.buffer), nameBytes, f.blob);
+      central.push({ nameBytes, crc, size, offset });
+      offset += 30 + nameBytes.length + size;
+    }
+    const cdStart = offset;
+    for (const c of central) {
+      const cd = new DataView(new ArrayBuffer(46));
+      cd.setUint32(0, 0x02014b50, true);
+      cd.setUint16(4, 20, true);
+      cd.setUint16(6, 20, true);
+      cd.setUint16(8, 0x0800, true);
+      cd.setUint16(12, dosTime, true);
+      cd.setUint16(14, dosDate, true);
+      cd.setUint32(16, c.crc, true);
+      cd.setUint32(20, c.size, true);
+      cd.setUint32(24, c.size, true);
+      cd.setUint16(28, c.nameBytes.length, true);
+      cd.setUint32(42, c.offset, true);
+      chunks.push(new Uint8Array(cd.buffer), c.nameBytes);
+      offset += 46 + c.nameBytes.length;
+    }
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true);
+    eocd.setUint16(8, central.length, true);
+    eocd.setUint16(10, central.length, true);
+    eocd.setUint32(12, offset - cdStart, true);
+    eocd.setUint32(16, cdStart, true);
+    chunks.push(new Uint8Array(eocd.buffer));
+    return new Blob(chunks, { type: 'application/zip' });
+  }
+
+  dlAllBtn.addEventListener('click', async () => {
+    const tiles = allGridTiles();
+    if (!tiles.length || dlAllBtn.disabled) return;
+    dlAllBtn.disabled = true;
+    try {
+      setGridMsg('正在打包 ZIP…');
+      const multi = gridGroups.length > 1;
+      const blob = await makeZip(tiles.map(t => ({ name: (multi ? t.folder + '/' : '') + t.name, blob: t.blob })));
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = zipName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      setGridMsg('已打包 ' + tiles.length + ' 块（' + fmtSize(blob.size) + '）为 ZIP' + (multi ? '，已按图片分文件夹' : ''));
+    } catch (err) {
+      setGridMsg('打包失败：' + err.message, true);
+    }
+    dlAllBtn.disabled = false;
+  });
+
+  // 切割规格：自定义行列输入框显隐
+  document.querySelectorAll('input[name="gridN"]').forEach(r => r.addEventListener('change', () => {
+    $('#gridCustomWrap').hidden = document.querySelector('input[name="gridN"]:checked').value !== 'custom';
+  }));
+
+  gridResetBtn.addEventListener('click', () => {
+    gridQueue.forEach(it => URL.revokeObjectURL(it.url));
+    gridQueue = [];
+    clearGridResults();
+    gridResult.hidden = true;
+    cutBtn.disabled = true;
+    setGridMsg('');
+    document.querySelector('input[name="gridN"][value="3"]').checked = true;
+    $('#gridCustomWrap').hidden = true;
+    document.querySelector('input[name="gridFmt"][value="png"]').checked = true;
+  });
+
+  /* ================= 工具三：图片压缩 ================= */
+
+  const cDrop = $('#compressDrop'), cFileInput = $('#compressFileInput');
+  const compressBtn = $('#compressBtn'), cResetBtn = $('#compressResetBtn'), cMsg = $('#compressMsg');
+  const cList = $('#compressList'), cListHeader = $('#cListHeader'), cCount = $('#cCount');
+  const cResult = $('#compressResult'), cResults = $('#compressResults'), cInfo = $('#compressInfo'), cZipBtn = $('#cZipBtn');
+  let cItems = [];      // { uid, file, url }
+  let cResultsArr = []; // { name, blob, url, origSize }
+  let cZipUrl = null;
+
+  const setCMsg = (text, isErr = false) => { cMsg.textContent = text; cMsg.classList.toggle('err', isErr); };
+
+  function compressAddFiles(list) {
+    const files = Array.from(list || []).filter(isImageFile);
+    if (!files.length) return setCMsg('未识别到图片文件', true);
+    for (const f of files) cItems.push({ uid: ++uidSeed, file: f, url: URL.createObjectURL(f) });
+    cItems.sort((a, b) => collator.compare(a.file.name || '', b.file.name || ''));
+    renderCList();
+    setCMsg('已添加 ' + files.length + ' 张，共 ' + cItems.length + ' 张（按文件名排序）');
+  }
+
+  function renderCList() {
+    cList.innerHTML = '';
+    cListHeader.hidden = !cItems.length;
+    cCount.textContent = '共 ' + cItems.length + ' 张';
+    // 一次性插入，避免逐行 append 触发多次重排
+    const frag = document.createDocumentFragment();
+    cItems.forEach((it) => {
+      const row = document.createElement('div');
+      row.className = 'file-item static';
+      const img = document.createElement('img');
+      img.className = 'thumb'; img.src = it.url; img.alt = '';
+      img.loading = 'lazy'; img.decoding = 'async';
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const name = document.createElement('div');
+      name.className = 'name'; name.textContent = it.file.name || '(粘贴的图片)';
+      const sub = document.createElement('div');
+      sub.className = 'sub'; sub.textContent = fmtSize(it.file.size);
+      meta.append(name, sub);
+      const ops = document.createElement('div');
+      ops.className = 'ops';
+      const del = document.createElement('button');
+      del.className = 'icon-btn'; del.type = 'button'; del.textContent = '✕'; del.title = '移除';
+      del.dataset.op = 'del';
+      ops.append(del);
+      row.append(img, meta, ops);
+      frag.append(row);
+    });
+    cList.append(frag);
+  }
+
+  cList.addEventListener('click', (e) => {
+    const btn = e.target.closest ? e.target.closest('.icon-btn') : null;
+    if (!btn) return;
+    const row = btn.closest('.file-item');
+    const idx = Array.from(cList.children).indexOf(row);
+    if (idx < 0) return;
+    URL.revokeObjectURL(cItems[idx].url);
+    cItems.splice(idx, 1);
+    renderCList();
+  });
+
+  cDrop.addEventListener('click', () => cFileInput.click());
+  cDrop.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cFileInput.click(); }
+  });
+  cFileInput.addEventListener('change', () => { compressAddFiles(cFileInput.files); cFileInput.value = ''; });
+
+  // 目标体积压缩：二分质量，找体积不超过目标的最高质量；达不到就用最低质量 30
+  async function encodeToTarget(cv, fmt, targetBytes, options) {
+    const enc = (q) => encodeImage(cv, fmt, { ...options, quality: q });
+    const probe = await enc(options.quality);
+    if (probe.blob.size <= targetBytes) return { blob: probe.blob, quality: options.quality, engine: probe.engine };
+    let lo = 30, hi = Math.min(100, options.quality - 1);
+    let result = null, qUsed = 30;
+    while (lo <= hi) {
+      const mid = Math.round((lo + hi) / 2);
+      const r = await enc(mid);
+      if (r.blob.size <= targetBytes) { result = r; qUsed = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    if (result) return { blob: result.blob, quality: qUsed, engine: result.engine };
+    const floorR = await enc(30);
+    return { blob: floorR.blob, quality: 30, engine: floorR.engine, note: '目标过小，已用最低质量' };
+  }
+
+  compressBtn.addEventListener('click', async () => {
+    if (!cItems.length) return setCMsg('请先添加图片', true);
+    compressBtn.disabled = true;
+    try {
+      const fmt = document.querySelector('input[name="cFmt"]:checked').value;
+      const quality = Math.max(30, Math.min(100, +$('#cQuality').value || 75));
+      const targetBytes = Math.max(0, +$('#cTargetKB').value || 0) * 1024;
+      const options = fmt === 'avif' ? { quality, speed: +$('#cAvifSpeed').value || 10 } : { quality };
+      cResultsArr.forEach(r => URL.revokeObjectURL(r.url));
+      cResultsArr = [];
+      cResult.hidden = true;
+      cResults.innerHTML = '';
+
+      let done = 0;
+      const failed = [];
+      const outs = (await mapLimit(cItems, 4, async (it) => {
+        try {
+          const src = await decodeSource(it.file);
+          let bw = srcW(src), bh = srcH(src);
+          // 画布尺寸上限保护
+          const overC = Math.max(bw / 16384, bh / 16384, (bw * bh) / 100e6);
+          if (overC > 1) {
+            const k = 1 / (overC * 1.01);
+            bw = Math.max(1, Math.round(bw * k)); bh = Math.max(1, Math.round(bh * k));
+          }
+          const cv = document.createElement('canvas');
+          cv.width = bw; cv.height = bh;
+          const cx = cv.getContext('2d');
+          if (!cx) throw new Error('无法创建画布');
+          cx.drawImage(src, 0, 0, bw, bh);
+          if (src.close) src.close();
+          let blob, engine, qualityUsed = quality, targetNote = '';
+          if (targetBytes > 0) {
+            const r = await encodeToTarget(cv, fmt, targetBytes, options);
+            blob = r.blob; engine = r.engine; qualityUsed = r.quality; targetNote = r.note || '';
+          } else {
+            const r = await encodeImage(cv, fmt, options);
+            blob = r.blob; engine = r.engine;
+          }
+          const base = ((it.file.name || 'image').replace(/\.[^.]+$/, '')) || 'image';
+          return { name: base + '.' + EXT[fmt], blob, origSize: it.file.size, engine, qualityUsed, targetNote, origUrl: it.url };
+        } catch (err) {
+          // 单张失败不拖垮整批：记下文件名，跳过继续
+          failed.push((it.file.name || '粘贴的图片') + '（' + err.message + '）');
+          return null;
+        } finally {
+          done++;
+          setCMsg('压缩中… ' + done + ' / ' + cItems.length);
+        }
+      })).filter(Boolean);
+      if (!outs.length) throw new Error('全部压缩失败：' + failed.join('；'));
+
+      outs.forEach((o) => {
+        const url = URL.createObjectURL(o.blob);
+        cResultsArr.push({ name: o.name, blob: o.blob, url, origSize: o.origSize, origUrl: o.origUrl });
+        const row = document.createElement('div');
+        row.className = 'c-row';
+        const nm = document.createElement('span');
+        nm.className = 'c-name'; nm.textContent = o.name;
+        if (o.targetNote) nm.title = o.targetNote;
+        const delta = document.createElement('span');
+        delta.className = 'c-delta';
+        const savedPct = o.origSize > 0 ? Math.round((1 - o.blob.size / o.origSize) * 100) : 0;
+        delta.textContent = fmtSize(o.origSize) + ' → ' + fmtSize(o.blob.size) +
+          (savedPct >= 0 ? '（省 ' + savedPct + '%）' : '（大 ' + (-savedPct) + '%）') +
+          (targetBytes > 0 ? ' · 质量 ' + o.qualityUsed : '');
+        const dl = document.createElement('a');
+        dl.href = url; dl.download = o.name; dl.textContent = '下载';
+        const cmp = document.createElement('a');
+        cmp.textContent = '对比';
+        cmp.addEventListener('click', (e) => { e.preventDefault(); openCompare(o.origUrl, url); });
+        row.append(nm, delta, cmp, dl);
+        cResults.append(row);
+      });
+
+      const origTotal = cResultsArr.reduce((s, r) => s + r.origSize, 0);
+      const newTotal = cResultsArr.reduce((s, r) => s + r.blob.size, 0);
+      const anyMain = outs.some(o => o.engine !== 'worker');
+      const allMet = targetBytes > 0 && outs.every(o => !o.targetNote);
+      cInfo.textContent = cResultsArr.length + ' 张 · 合计 ' + fmtSize(origTotal) + ' → ' + fmtSize(newTotal) +
+        (origTotal > 0 ? '（省 ' + Math.max(0, Math.round((1 - newTotal / origTotal) * 100)) + '%）' : '') +
+        ' · ' + (targetBytes > 0
+          ? '目标 ' + fmtSize(targetBytes) + (allMet ? '，全部达标' : '，部分未达标')
+          : '质量 ' + quality) +
+        ' · ' + (anyMain ? '部分经主线程编码' : 'Squoosh WASM（Worker 后台编码）') +
+        (failed.length ? ' · ' + failed.length + ' 张解码失败已跳过' : '');
+      cZipBtn.hidden = cResultsArr.length < 2;
+      cResult.hidden = false;
+      setCMsg('压缩完成，共 ' + cResultsArr.length + ' 张' + (failed.length ? '，' + failed.length + ' 张失败已跳过' : ''));
+      cResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (err) {
+      setCMsg('压缩失败：' + err.message, true);
+    }
+    compressBtn.disabled = false;
+  });
+
+  cZipBtn.addEventListener('click', async () => {
+    if (!cResultsArr.length || cZipBtn.disabled) return;
+    cZipBtn.disabled = true;
+    try {
+      setCMsg('正在打包 ZIP…');
+      const blob = await makeZip(cResultsArr);
+      if (cZipUrl) URL.revokeObjectURL(cZipUrl);
+      cZipUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = cZipUrl;
+      a.download = 'compressed-' + document.querySelector('input[name="cFmt"]:checked').value + '.zip';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setCMsg('已打包 ' + cResultsArr.length + ' 张（' + fmtSize(blob.size) + '）为 ZIP');
+    } catch (err) {
+      setCMsg('打包失败：' + err.message, true);
+    }
+    cZipBtn.disabled = false;
+  });
+
+  cResetBtn.addEventListener('click', () => {
+    cItems.forEach(it => URL.revokeObjectURL(it.url));
+    cItems = [];
+    cResultsArr.forEach(r => URL.revokeObjectURL(r.url));
+    cResultsArr = [];
+    if (cZipUrl) { URL.revokeObjectURL(cZipUrl); cZipUrl = null; }
+    renderCList();
+    cResult.hidden = true;
+    cResults.innerHTML = '';
+    setCMsg('');
+    $('#cAvifSpeed').value = '10';
+    syncCompressFmtUI(true);
+  });
+
+  /* ================= 共用：设置记忆（只存选项，不存任何图片数据） ================= */
+
+  const SETTINGS_KEY = 'pingtu-settings-v2'; // v2：黑底/最快速度为新默认，弃用旧缓存
+  const settingsMap = [
+    ['mode', 'mode', 'radio'], ['format', 'format', 'radio'],
+    ['quality', 'quality'], ['maxEdge', 'maxEdge'],
+    ['gapPx', 'gap'], ['marginPx', 'margin'], ['radiusPx', 'radius'], ['bgColor', 'bg'], ['avifSpeed', 'avifSpeed'],
+    ['gridN', 'gridN', 'radio'], ['gridFmt', 'gridFmt', 'radio'],
+    ['cFmt', 'cFmt', 'radio'], ['cQuality', 'cQuality'], ['cAvifSpeed', 'cAvifSpeed'],
+    ['cTargetKB', 'cTargetKB'], ['gridRows', 'gridRows'], ['gridCols', 'gridCols'],
+    ['wmEnable', 'wm', 'check'], ['wmText', 'wmText'], ['wmSize', 'wmSize'],
+    ['wmOpacity', 'wmOpacity'], ['wmPos', 'wmPos'], ['wmColor', 'wmColor'],
+  ];
+  function saveSettings() {
+    try {
+      const s = {};
+      for (const [name, key, kind] of settingsMap) {
+        const el = kind === 'radio'
+          ? document.querySelector('input[name="' + name + '"]:checked')
+          : document.getElementById(name);
+        if (el) s[key] = kind === 'check' ? el.checked : el.value;
+      }
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    } catch (_) {}
+  }
+  function loadSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null');
+      if (!s) return;
+      for (const [name, key, kind] of settingsMap) {
+        if (!(key in s)) continue;
+        if (kind === 'radio') {
+          const el = document.querySelector('input[name="' + name + '"][value="' + s[key] + '"]');
+          if (el) el.checked = true;
+        } else if (kind === 'check') {
+          const el = document.getElementById(name);
+          if (el) el.checked = !!s[key];
+        } else {
+          const el = document.getElementById(name);
+          if (el) el.value = s[key];
+        }
+      }
+    } catch (_) {}
+  }
+  const defaultQualityFor = (fmt) => (fmt === 'avif' ? 50 : 75);
+  function syncMergeFmtUI(resetQuality) {
+    const fmt = document.querySelector('input[name="format"]:checked').value;
+    $('#avifSpeedWrap').hidden = fmt !== 'avif';
+    if (resetQuality) $('#quality').value = defaultQualityFor(fmt);
+    $('#qualityVal').textContent = $('#quality').value;
+  }
+  function syncCompressFmtUI(resetQuality) {
+    const fmt = document.querySelector('input[name="cFmt"]:checked').value;
+    $('#cAvifSpeedWrap').hidden = fmt !== 'avif';
+    if (resetQuality) $('#cQuality').value = defaultQualityFor(fmt);
+    $('#cQualityVal').textContent = $('#cQuality').value;
+  }
+  document.querySelectorAll('input[name="format"]').forEach(r => r.addEventListener('change', () => syncMergeFmtUI(true)));
+  document.querySelectorAll('input[name="cFmt"]').forEach(r => r.addEventListener('change', () => syncCompressFmtUI(true)));
+  $('#quality').addEventListener('input', () => { $('#qualityVal').textContent = $('#quality').value; });
+  $('#cQuality').addEventListener('input', () => { $('#cQualityVal').textContent = $('#cQuality').value; });
+  $('#wmEnable').addEventListener('change', () => { $('#wmOpts').hidden = !$('#wmEnable').checked; });
+  $('#wmOpacity').addEventListener('input', () => { $('#wmOpacityVal').textContent = $('#wmOpacity').value + '%'; });
+  let saveTimer = null;
+  const queueSave = () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 300); };
+  document.addEventListener('change', queueSave, true);
+  document.addEventListener('input', queueSave, true);
+
+  /* ================= 共用：一键回顶 / 到底 ================= */
+
+  const jumpTop = $('#jumpTop'), jumpBottom = $('#jumpBottom');
+  function updateJumpBtns() {
+    const scrollable = document.documentElement.scrollHeight > window.innerHeight + 40;
+    jumpTop.style.display = jumpBottom.style.display = scrollable ? '' : 'none';
+  }
+  jumpTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  jumpBottom.addEventListener('click', () => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }));
+  window.addEventListener('scroll', updateJumpBtns, { passive: true });
+  window.addEventListener('resize', updateJumpBtns);
+  updateJumpBtns();
+
+  // —— 星空背景：缓慢漂移 + 闪烁 + 偶尔流星（prefers-reduced-motion 时静止） ——
+  const starCanvas = $('#starfield'), starCtx = starCanvas.getContext('2d');
+  const stars = [];
+  let shoot = null, nextShootAt = performance.now() + 6000 + Math.random() * 9000;
+  const motionOK = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function starResize() {
+    starCanvas.width = innerWidth; starCanvas.height = innerHeight;
+    stars.length = 0;
+    const n = Math.min(220, Math.round(innerWidth * innerHeight / 9000));
+    for (let i = 0; i < n; i++) {
+      stars.push({
+        x: Math.random() * starCanvas.width, y: Math.random() * starCanvas.height,
+        r: Math.random() * 1.1 + 0.3, base: Math.random() * 0.55 + 0.2,
+        sp: Math.random() * 1.6 + 0.4, ph: Math.random() * Math.PI * 2,
+        vy: Math.random() * 0.06 + 0.02, vx: Math.random() * 0.03 - 0.015,
+      });
+    }
+  }
+  starResize();
+  // 静止模式下循环会停，所以窗口尺寸变化后要手动补画一帧
+  window.addEventListener('resize', () => {
+    starResize();
+    if (!motionOK) requestAnimationFrame(starTick);
+  });
+  function starTick(now) {
+    if (document.hidden) { requestAnimationFrame(starTick); return; }
+    starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
+    const t = now / 1000;
+    for (const s of stars) {
+      if (motionOK) {
+        s.y += s.vy; s.x += s.vx;
+        if (s.y > starCanvas.height + 2) { s.y = -2; s.x = Math.random() * starCanvas.width; }
+        if (s.x < -2) s.x = starCanvas.width + 2; else if (s.x > starCanvas.width + 2) s.x = -2;
+      }
+      starCtx.globalAlpha = motionOK ? s.base * (0.55 + 0.45 * Math.sin(t * s.sp + s.ph)) : s.base;
+      starCtx.fillStyle = '#fff';
+      starCtx.beginPath();
+      starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      starCtx.fill();
+    }
+    // 流星：每隔一段时间随机划过
+    if (motionOK) {
+      if (!shoot && now > nextShootAt) {
+        shoot = { x: Math.random() * starCanvas.width * 0.8 + starCanvas.width * 0.1, y: -10,
+                  vx: -(Math.random() * 3 + 2.5), vy: Math.random() * 2 + 2, life: 1 };
+      }
+      if (shoot) {
+        shoot.x += shoot.vx; shoot.y += shoot.vy; shoot.life -= 0.012;
+        const tail = 14;
+        const grad = starCtx.createLinearGradient(shoot.x, shoot.y, shoot.x - shoot.vx * tail, shoot.y - shoot.vy * tail);
+        grad.addColorStop(0, 'rgba(255,255,255,' + Math.max(0, shoot.life) + ')');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        starCtx.globalAlpha = 1;
+        starCtx.strokeStyle = grad;
+        starCtx.lineWidth = 1.4;
+        starCtx.beginPath();
+        starCtx.moveTo(shoot.x, shoot.y);
+        starCtx.lineTo(shoot.x - shoot.vx * tail, shoot.y - shoot.vy * tail);
+        starCtx.stroke();
+        if (shoot.life <= 0 || shoot.y > starCanvas.height + 40) {
+          shoot = null; nextShootAt = now + 7000 + Math.random() * 11000;
+        }
+      }
+    }
+    starCtx.globalAlpha = 1;
+    // prefers-reduced-motion 下画面恒定，画一帧即停，避免整页驻留的逐帧重绘
+    if (motionOK) requestAnimationFrame(starTick);
+  }
+  requestAnimationFrame(starTick);
+
+  // —— 灯箱：点击合并结果图 / 切块放大查看，点击任意处或 Esc 关闭 ——
+  const lightbox = $('#lightbox'), lightboxImg = $('#lightboxImg');
+  document.addEventListener('click', (e) => {
+    if (!lightbox.hidden) { lightbox.hidden = true; lightboxImg.removeAttribute('src'); return; }
+    const img = e.target.closest ? e.target.closest('#resultImg, .tile img') : null;
+    if (img && img.src) { lightboxImg.src = img.src; lightbox.hidden = false; }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !lightbox.hidden) { lightbox.hidden = true; lightboxImg.removeAttribute('src'); }
+  });
+
+  // —— 压缩前后对比：拖动滑块查看两侧画质 ——
+  const compareBox = $('#compareBox');
+  function openCompare(origUrl, compUrl) {
+    $('#cmpOrig').src = origUrl;
+    $('#cmpComp').src = compUrl;
+    $('#cmpOverlay').style.width = '50%';
+    $('#cmpDivider').style.left = '50%';
+    $('#cmpSlider').value = 50;
+    compareBox.hidden = false;
+  }
+  $('#cmpSlider').addEventListener('input', (e) => {
+    const pct = e.target.value;
+    $('#cmpOverlay').style.width = pct + '%';
+    $('#cmpDivider').style.left = pct + '%';
+  });
+  $('#cmpClose').addEventListener('click', () => { compareBox.hidden = true; });
+  compareBox.addEventListener('click', (e) => { if (e.target === compareBox) compareBox.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !compareBox.hidden) compareBox.hidden = true; });
+
+  // 启动时恢复上次的选项，再同步格式相关的 UI 显隐
+  loadSettings();
+  syncMergeFmtUI(false);
+  syncCompressFmtUI(false);
+  $('#wmOpts').hidden = !$('#wmEnable').checked;
+  // 恢复勾选是程序赋值，不会触发 change，这里要手动同步自定义行列输入框的显隐
+  $('#gridCustomWrap').hidden = document.querySelector('input[name="gridN"]:checked').value !== 'custom';
+  renderToc();
+})();
+</script>
+</body>
+</html>
