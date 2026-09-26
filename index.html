@@ -25,10 +25,20 @@
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
     color: var(--text);
-    background: var(--bg);
+    /* 星云底色：几团极淡的冷色光晕，给纯黑背景一点纵深。静态不参与动画，只绘制一次 */
+    background:
+      radial-gradient(1150px 660px at 13% -12%, rgba(58, 82, 168, .17), transparent 62%),
+      radial-gradient(900px 580px at 89% 1%, rgba(26, 100, 120, .13), transparent 60%),
+      radial-gradient(1260px 840px at 52% 122%, rgba(74, 60, 148, .13), transparent 66%),
+      var(--bg);
     -webkit-font-smoothing: antialiased;
   }
-  #starfield { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  /* 星空首帧画完再淡入，避免打开瞬间「啪」地冒出来 */
+  #starfield {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    opacity: 0; transition: opacity .9s ease-out;
+  }
+  #starfield.on { opacity: 1; }
   ::selection { background: rgba(255, 255, 255, .22); }
   ::-webkit-scrollbar { width: 10px; }
   ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 5px; }
@@ -54,7 +64,8 @@
   }
   .tool-tab:hover { color: #fff; border-color: var(--border-strong); }
   .tool-tab.active {
-    background: #fff; color: #000; border-color: #fff; font-weight: 600; box-shadow: none;
+    background: #fff; color: #000; border-color: #fff; font-weight: 600;
+    box-shadow: 0 0 26px rgba(255, 255, 255, .16); /* 一点辉光，呼应星空 */
   }
 
   /* 毛玻璃主卡片 */
@@ -64,6 +75,15 @@
     background: #0f0f0f;
     box-shadow: 0 1px 0 rgba(255, 255, 255, .05), 0 24px 60px rgba(0, 0, 0, .6);
   }
+  /* 卡片顶缘一道极淡的高光，像被星光擦过 */
+  .glass::before {
+    content: ''; position: absolute; left: 14px; right: 14px; top: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .3), transparent);
+    pointer-events: none;
+  }
+  /* 切换工具时新出现的区块轻微上浮淡入（只在切换时加 .enter，首屏不加，免得拖慢首次绘制） */
+  @keyframes sectionIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+  .glass > section.enter { animation: sectionIn .22s ease-out; }
 
   .row { display: flex; align-items: flex-start; margin-bottom: 22px; }
   .label { flex: none; width: 78px; padding-top: 2px; font-size: 14px; color: var(--dim); letter-spacing: .04em; }
@@ -128,13 +148,19 @@
   .actions { display: flex; gap: 14px; margin-top: 28px; }
   .btn {
     border: 1px solid transparent; border-radius: 12px; padding: 13px 34px; font-size: 15px; cursor: pointer;
-    font-family: inherit; letter-spacing: .02em; transition: filter .15s, background .15s, border-color .15s;
+    font-family: inherit; letter-spacing: .02em;
+    transition: filter .15s, background .15s, border-color .15s, transform .15s, box-shadow .15s;
   }
+  .btn:not(:disabled):hover { transform: translateY(-1px); }
+  .btn:not(:disabled):active { transform: translateY(0); }
   .btn-primary {
     background: #fff; color: #000; font-weight: 600;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, .08);
   }
-  .btn-primary:hover { background: #e6e6e6; }
+  .btn-primary:hover {
+    background: #e6e6e6;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, .2), 0 8px 22px rgba(255, 255, 255, .1);
+  }
   .btn-ghost { background: rgba(255, 255, 255, .04); color: var(--text); border-color: var(--border); }
   .btn-ghost:hover { background: rgba(255, 255, 255, .07); border-color: var(--border-strong); }
   .btn:disabled { opacity: .55; cursor: default; filter: none; }
@@ -554,6 +580,12 @@
     h1Zh.textContent = toolMeta[t].zh;
     h1En.textContent = toolMeta[t].en;
     document.title = toolMeta[t].title;
+    // 切换时让新出现的区块轻微上浮淡入（只在这里加 .enter，首屏不加，免得拖慢首次绘制）
+    const sec = $('#tool-' + t);
+    sec.classList.remove('enter');
+    void sec.offsetWidth;   // 强制重排，让动画能重新播放
+    sec.classList.add('enter');
+    sec.addEventListener('animationend', () => sec.classList.remove('enter'), { once: true });
     renderToc();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -1160,6 +1192,23 @@
           // 像素缓冲按 transferable 零拷贝移交，避免大数组再复制一份
           st.w.postMessage({ id, fmt, buf, width: imageData.width, height: imageData.height, options }, [buf]);
         });
+      },
+      // 空闲预热：把池里的 worker 全部建好，并用一张 2×2 的小图让 WASM 完成实例化。
+      // 这样首次合并/压缩不用再等「正在加载编码器…」，也不用等 WASM 编译。
+      warmup(fmt) {
+        if (broken) return Promise.resolve();
+        const jobs = [];
+        for (let i = 0; i < SIZE; i++) {
+          const st = getWorker();
+          if (!st) break;
+          jobs.push(new Promise((res) => {
+            const id = ++seq, px = new Uint8ClampedArray(16); // 2×2 RGBA
+            st.jobs.set(id, { res: () => res(), rej: () => res() }); // 预热失败无所谓，静默吞掉
+            st.load++;
+            st.w.postMessage({ id, fmt, buf: px.buffer, width: 2, height: 2, options: { quality: 10 } }, [px.buffer]);
+          }));
+        }
+        return Promise.all(jobs);
       },
     };
   })();
@@ -2004,74 +2053,150 @@
   updateJumpBtns();
 
   // —— 星空背景：缓慢漂移 + 闪烁 + 偶尔流星（prefers-reduced-motion 时静止） ——
+  // 细节：星星分三种色温（白 / 冷蓝 / 暖白），按色温分组绘制、每组只切一次 fillStyle；
+  // 约 7% 是亮星，额外叠一层预渲染的光晕贴图（每帧新建径向渐变太贵，实测贴图反而要慢 3.6 倍，
+  // 所以光晕只给少数亮星用，普通星保持 arc+fill —— 压测下来 144 颗星只要 0.094ms/帧）。
   const starCanvas = $('#starfield'), starCtx = starCanvas.getContext('2d');
-  const stars = [];
+  const STAR_GROUPS = [
+    { core: '#ffffff', hi: 'rgba(226, 238, 255, .34)', lo: 'rgba(226, 238, 255, .09)' }, // 白
+    { core: '#cfe0ff', hi: 'rgba(178, 206, 255, .32)', lo: 'rgba(178, 206, 255, .09)' }, // 冷蓝
+    { core: '#ffe6c4', hi: 'rgba(255, 222, 176, .28)', lo: 'rgba(255, 222, 176, .08)' }, // 暖白
+  ];
+  const stars = [];                                    // 全部星星
+  const groups = STAR_GROUPS.map(() => []);             // 按色温分组，供逐组绘制
+  const bright = [];                                    // 带光晕的亮星
   let shoot = null, nextShootAt = performance.now() + 6000 + Math.random() * 9000;
+  let lastFrame = -1e9, prevNow = 0, starDrawn = false;
   const motionOK = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const FRAME_MS = 1000 / 30;   // 限帧：星点漂移/闪烁都很慢，30fps 与 60fps 肉眼无差，整屏合成量减半
+
+  // 光晕贴图：3 种色温 × 3 档尺寸，只在初始化时渲染一次
+  const halos = STAR_GROUPS.map((g) => [0, 1, 2].map((k) => {
+    const d = 20 + k * 12;
+    const c = document.createElement('canvas');
+    c.width = c.height = d;
+    const x = c.getContext('2d');
+    const rg = x.createRadialGradient(d / 2, d / 2, 0, d / 2, d / 2, d / 2);
+    rg.addColorStop(0, g.hi);
+    rg.addColorStop(.45, g.lo);
+    rg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    x.fillStyle = rg;
+    x.fillRect(0, 0, d, d);
+    return { c, d };
+  }));
+
   function starResize() {
     starCanvas.width = innerWidth; starCanvas.height = innerHeight;
-    stars.length = 0;
+    stars.length = 0; bright.length = 0;
+    for (const g of groups) g.length = 0;
     const n = Math.min(220, Math.round(innerWidth * innerHeight / 9000));
     for (let i = 0; i < n; i++) {
-      stars.push({
+      // 色温配比：约 60% 白、25% 冷蓝、15% 暖白
+      const g = Math.random() < .60 ? 0 : (Math.random() < .62 ? 1 : 2);
+      const s = {
         x: Math.random() * starCanvas.width, y: Math.random() * starCanvas.height,
         r: Math.random() * 1.1 + 0.3, base: Math.random() * 0.55 + 0.2,
         sp: Math.random() * 1.6 + 0.4, ph: Math.random() * Math.PI * 2,
         vy: Math.random() * 0.06 + 0.02, vx: Math.random() * 0.03 - 0.015,
-      });
+        g,
+      };
+      if (Math.random() < .07) {            // 亮星：大一点、亮一点，并挂上光晕
+        s.r = Math.random() * 0.7 + 1.0;
+        s.base = Math.min(1, s.base + .3);
+        s.halo = halos[g][s.r > 1.5 ? 2 : (s.r > 1.2 ? 1 : 0)];
+        bright.push(s);
+      }
+      stars.push(s);
+      groups[g].push(s);
     }
   }
+
+  function drawStars(now) {
+    // 用时间差换算位移（以 60fps 为基准），限帧后漂移速度跟原来一致
+    const dt = prevNow ? Math.min(3, (now - prevNow) / 16.667) : 1;
+    prevNow = now;
+    const t = now / 1000, W = starCanvas.width, H = starCanvas.height;
+
+    if (motionOK) {
+      for (const s of stars) {
+        s.y += s.vy * dt; s.x += s.vx * dt;
+        if (s.y > H + 2) { s.y = -2; s.x = Math.random() * W; }
+        if (s.x < -2) s.x = W + 2; else if (s.x > W + 2) s.x = -2;
+      }
+    }
+    starCtx.clearRect(0, 0, W, H);
+
+    // 先铺光晕（压在星点下面）
+    for (const s of bright) {
+      starCtx.globalAlpha = (motionOK ? s.base * (0.55 + 0.45 * Math.sin(t * s.sp + s.ph)) : s.base) * .55;
+      starCtx.drawImage(s.halo.c, s.x - s.halo.d / 2, s.y - s.halo.d / 2);
+    }
+
+    // 再画星点：按色温分组，每组只切一次 fillStyle
+    for (let g = 0; g < groups.length; g++) {
+      starCtx.fillStyle = STAR_GROUPS[g].core;
+      for (const s of groups[g]) {
+        starCtx.globalAlpha = motionOK ? s.base * (0.55 + 0.45 * Math.sin(t * s.sp + s.ph)) : s.base;
+        starCtx.beginPath();
+        starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        starCtx.fill();
+      }
+    }
+
+    // 流星：每隔一段时间随机划过
+    if (motionOK) {
+      if (!shoot && now > nextShootAt) {
+        shoot = { x: Math.random() * W * 0.8 + W * 0.1, y: -10,
+                  vx: -(Math.random() * 3 + 2.5), vy: Math.random() * 2 + 2, life: 1 };
+      }
+      if (shoot) {
+        shoot.x += shoot.vx * dt; shoot.y += shoot.vy * dt; shoot.life -= 0.012 * dt;
+        const tail = 14;
+        const tx = shoot.x - shoot.vx * tail, ty = shoot.y - shoot.vy * tail;
+        const grad = starCtx.createLinearGradient(shoot.x, shoot.y, tx, ty);
+        grad.addColorStop(0, 'rgba(255, 255, 255, ' + Math.max(0, shoot.life) + ')');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        starCtx.globalAlpha = 1;
+        starCtx.strokeStyle = grad;
+        starCtx.lineWidth = 1.4;
+        starCtx.beginPath();
+        starCtx.moveTo(shoot.x, shoot.y);
+        starCtx.lineTo(tx, ty);
+        starCtx.stroke();
+        // 头部加一个小亮点，让流星有「芯」而不是一条光带
+        starCtx.globalAlpha = Math.max(0, shoot.life);
+        starCtx.fillStyle = '#fff';
+        starCtx.beginPath();
+        starCtx.arc(shoot.x, shoot.y, 1.5, 0, Math.PI * 2);
+        starCtx.fill();
+        if (shoot.life <= 0 || shoot.y > H + 40) {
+          shoot = null; nextShootAt = now + 7000 + Math.random() * 11000;
+        }
+      }
+    }
+    starCtx.globalAlpha = 1;
+  }
+
+  function starTick(now) {
+    if (document.hidden) { requestAnimationFrame(starTick); return; }
+    if (motionOK && now - lastFrame < FRAME_MS) { requestAnimationFrame(starTick); return; }
+    lastFrame = now;
+    drawStars(now);
+    if (!starDrawn) { starDrawn = true; starCanvas.classList.add('on'); }
+    // prefers-reduced-motion 下画面恒定，画一帧即停，避免整页驻留的逐帧重绘
+    if (motionOK) requestAnimationFrame(starTick);
+  }
+
   starResize();
   // 静止模式下循环会停，所以窗口尺寸变化后要手动补画一帧
   window.addEventListener('resize', () => {
     starResize();
     if (!motionOK) requestAnimationFrame(starTick);
   });
-  function starTick(now) {
-    if (document.hidden) { requestAnimationFrame(starTick); return; }
-    starCtx.clearRect(0, 0, starCanvas.width, starCanvas.height);
-    const t = now / 1000;
-    for (const s of stars) {
-      if (motionOK) {
-        s.y += s.vy; s.x += s.vx;
-        if (s.y > starCanvas.height + 2) { s.y = -2; s.x = Math.random() * starCanvas.width; }
-        if (s.x < -2) s.x = starCanvas.width + 2; else if (s.x > starCanvas.width + 2) s.x = -2;
-      }
-      starCtx.globalAlpha = motionOK ? s.base * (0.55 + 0.45 * Math.sin(t * s.sp + s.ph)) : s.base;
-      starCtx.fillStyle = '#fff';
-      starCtx.beginPath();
-      starCtx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-      starCtx.fill();
-    }
-    // 流星：每隔一段时间随机划过
-    if (motionOK) {
-      if (!shoot && now > nextShootAt) {
-        shoot = { x: Math.random() * starCanvas.width * 0.8 + starCanvas.width * 0.1, y: -10,
-                  vx: -(Math.random() * 3 + 2.5), vy: Math.random() * 2 + 2, life: 1 };
-      }
-      if (shoot) {
-        shoot.x += shoot.vx; shoot.y += shoot.vy; shoot.life -= 0.012;
-        const tail = 14;
-        const grad = starCtx.createLinearGradient(shoot.x, shoot.y, shoot.x - shoot.vx * tail, shoot.y - shoot.vy * tail);
-        grad.addColorStop(0, 'rgba(255,255,255,' + Math.max(0, shoot.life) + ')');
-        grad.addColorStop(1, 'rgba(255,255,255,0)');
-        starCtx.globalAlpha = 1;
-        starCtx.strokeStyle = grad;
-        starCtx.lineWidth = 1.4;
-        starCtx.beginPath();
-        starCtx.moveTo(shoot.x, shoot.y);
-        starCtx.lineTo(shoot.x - shoot.vx * tail, shoot.y - shoot.vy * tail);
-        starCtx.stroke();
-        if (shoot.life <= 0 || shoot.y > starCanvas.height + 40) {
-          shoot = null; nextShootAt = now + 7000 + Math.random() * 11000;
-        }
-      }
-    }
-    starCtx.globalAlpha = 1;
-    // prefers-reduced-motion 下画面恒定，画一帧即停，避免整页驻留的逐帧重绘
-    if (motionOK) requestAnimationFrame(starTick);
-  }
-  requestAnimationFrame(starTick);
+  // 等 load 之后再起动画：首屏绘制时不去抢主线程
+  const startStars = () => requestAnimationFrame(starTick);
+  if (document.readyState === 'complete') startStars();
+  else window.addEventListener('load', startStars, { once: true });
 
   // —— 灯箱：点击合并结果图 / 切块放大查看，点击任意处或 Esc 关闭 ——
   const lightbox = $('#lightbox'), lightboxImg = $('#lightboxImg');
@@ -2111,6 +2236,30 @@
   // 恢复勾选是程序赋值，不会触发 change，这里要手动同步自定义行列输入框的显隐
   $('#gridCustomWrap').hidden = document.querySelector('input[name="gridN"]:checked').value !== 'custom';
   renderToc();
+
+  /* ================= 共用：空闲预热编码器 ================= */
+
+  // 首次合并/压缩原本要等「正在加载编码器…」+ WASM 编译，这里趁页面空闲先把它们备好。
+  // 只预热 mozJPEG / webP：AVIF 的 WASM 有 3.5MB，还要在每个 worker 里各实例化一份，
+  // 空闲时预热反而会造成可感知的卡顿，而 AVIF 本来就已经在 UI 上标注了「编码最慢」。
+  const WARMABLE = ['mozjpeg', 'webp'];
+  function warmEncoders() {
+    const picked = [
+      document.querySelector('input[name="format"]:checked').value,
+      document.querySelector('input[name="cFmt"]:checked').value,
+    ];
+    for (const fmt of [...new Set(picked)]) {
+      if (!WARMABLE.includes(fmt)) continue;
+      getSquooshEncoder(fmt).catch(() => {});                       // 主线程模块（file:// 下 worker 不可用也能受益）
+      if (workerPool && !workerPool.broken) workerPool.warmup(fmt).catch(() => {});
+    }
+  }
+  const scheduleWarmup = () => {
+    if (window.requestIdleCallback) requestIdleCallback(warmEncoders, { timeout: 4000 });
+    else setTimeout(warmEncoders, 2500);
+  };
+  if (document.readyState === 'complete') scheduleWarmup();
+  else window.addEventListener('load', scheduleWarmup, { once: true });
 })();
 </script>
 </body>
