@@ -1,0 +1,46 @@
+# ── 密钥与凭据（本文件存在的唯一理由：防止 git add . 把密钥推上去）──
+.env
+.env.*
+!.env.example
+*.env
+secrets.yml
+secrets.yaml
+config/secrets.yml
+credentials.json
+service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+.ssh/
+.aws/
+.azure/
+.gcp/
+.npmrc
+.pypirc
+.netrc
+# ── 系统与编辑器垃圾 ──
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+# ── 运行时与依赖 ──
+node_modules/
+__pycache__/
+*.pyc
+*.log
+venv/
+.venv/
+dist/
+build/
+# ── 本地临时 ──
+*.bak
+*.tmp
+*.orig
